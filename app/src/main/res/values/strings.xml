@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">SecureAttend</string>
+    <string name="title_activity_lecturer">Lecturer Dashboard</string>
+    <string name="title_activity_student">Student Portal</string>
+    <string name="scanning">Scanning for Class...</string>
+    <string name="verifying">Verifying Session...</string>
+    <string name="no_session">No session found.</string>
+    <string name="attendance_marked">✅ Attendance Marked</string>
+    <string name="attendance_exists">Already marked.</string>
+    <string name="permission_missing">Permissions missing</string>
+    <string name="no_internet">No internet connection</string>
+    <string name="security_error">Security error</string>
+    <string name="location_required">Location required</string>
+    <string name="lecturer_not_found">Class not found.</string>
+    <string name="failed_to_mark">Marking failed</string>
+    <string name="database_error">Database error: %1$s</string>
+    <string name="saved_offline">Syncing...</string>
+</resources>

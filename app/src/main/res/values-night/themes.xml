@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.AutoAttendance" parent="Theme.Material3.Dark.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/brand_light</item>
+        <item name="colorOnPrimary">@color/brand_primary</item>
+        <item name="colorPrimaryContainer">@color/brand_primary</item>
+        <item name="colorOnPrimaryContainer">@color/brand_light</item>
+
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/brand_accent</item>
+        <item name="colorOnSecondary">@color/brand_primary</item>
+
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@color/surface_background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Background colors -->
+        <item name="android:windowBackground">@color/surface_background_dark</item>
+        <item name="colorSurface">@color/surface_card_dark</item>
+    </style>
+</resources>

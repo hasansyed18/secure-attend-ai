@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Outer Shield -->
+    <path
+        android:fillColor="@color/brand_primary"
+        android:pathData="M50,5 L15,20 L15,45 C15,65 30,85 50,95 C70,85 85,65 85,45 L85,20 L50,5 Z" />
+    <!-- Bluetooth Style Symbol -->
+    <path
+        android:strokeColor="@color/white"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M50,25 L50,75 M50,25 L65,40 L35,60 M50,75 L65,60 L35,40" />
+</vector>
