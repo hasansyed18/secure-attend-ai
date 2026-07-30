@@ -2,22 +2,20 @@ package com.example.autoattendance
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.*
 import android.content.pm.PackageManager
 import android.location.LocationManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelUuid
 import android.provider.Settings
+import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
@@ -25,12 +23,12 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.example.autoattendance.geofence.GeofenceValidator
+import com.example.autoattendance.geofence.ClassroomBoundaryManager
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
-import java.util.UUID
-import android.os.ParcelUuid
-import android.util.Log
+import java.util.*
 
 class StudentActivity : AppCompatActivity() {
 
@@ -38,9 +36,7 @@ class StudentActivity : AppCompatActivity() {
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bleScanner: BluetoothLeScanner? = null
     private var scanCallback: ScanCallback? = null
-
-    private val scanTimeoutHandler = Handler(Looper.getMainLooper())
-    private var scanTimeoutRunnable: Runnable? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var tvStatus: TextView
     private lateinit var ivStatusIcon: ImageView
@@ -52,14 +48,15 @@ class StudentActivity : AppCompatActivity() {
     private lateinit var tvStudentInitials: TextView
 
     private val database = FirebaseDatabase.getInstance()
+    private val sessionsRef = database.reference.child("sessions")
     private val rootRef = database.reference
 
     private val SERVICE_UUID = ParcelUuid.fromString("0000FEAF-0000-1000-8000-00805F9B34FB")
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        if (permissions.entries.all { it.value }) {
+        if (permissions.values.all { it }) {
             Handler(Looper.getMainLooper()).postDelayed({ checkLocationEnabledAndProceed() }, 500)
-        } else { Toast.makeText(this, "Permissions required.", Toast.LENGTH_SHORT).show() }
+        } else { Toast.makeText(this, "Permissions are required for scanning.", Toast.LENGTH_SHORT).show() }
     }
 
     private val enableBluetoothLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -81,11 +78,16 @@ class StudentActivity : AppCompatActivity() {
         
         setContentView(R.layout.activity_student)
         initViews(userPrefs)
+        
         bluetoothAdapter = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
         
         btnMarkAttendance.setOnClickListener { checkPermissionsAndProcess() }
         btnViewHistory.setOnClickListener { startActivity(Intent(this, AttendanceHistoryActivity::class.java)) }
         btnLogout.setOnClickListener { confirmLogout() }
+
+        // Entrance Animation
+        findViewById<View>(android.R.id.content).alpha = 0f
+        findViewById<View>(android.R.id.content).animate().alpha(1f).setDuration(500).start()
     }
 
     @SuppressLint("SetTextI18n")
@@ -101,25 +103,17 @@ class StudentActivity : AppCompatActivity() {
 
         val name = prefs.getString("name", "Student") ?: "Student"
         val usn = prefs.getString("usn", "---") ?: "---"
+        
         tvStudentName.text = name
         tvStudentUsn.text = "USN: $usn"
         tvStudentInitials.text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
     }
 
-    private fun isOnline(): Boolean {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val net = cm.activeNetwork ?: return false
-        val cap = cm.getNetworkCapabilities(net) ?: return false
-        return cap.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }
-
     private fun checkPermissionsAndProcess() {
-        val required = mutableListOf<String>()
+        val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { 
-            required.add(Manifest.permission.BLUETOOTH_SCAN)
-            required.add(Manifest.permission.BLUETOOTH_CONNECT) 
+            required.addAll(listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)) 
         }
-        required.add(Manifest.permission.ACCESS_FINE_LOCATION)
         val missing = required.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) checkLocationEnabledAndProceed() else requestPermissionLauncher.launch(missing.toTypedArray())
     }
@@ -127,7 +121,7 @@ class StudentActivity : AppCompatActivity() {
     private fun checkLocationEnabledAndProceed() {
         val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            AlertDialog.Builder(this).setTitle("Location Required").setMessage("GPS must be ON for verification.").setPositiveButton("Settings") { _, _ -> enableLocationLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }.show()
+            AlertDialog.Builder(this).setTitle("Location Required").setMessage("GPS is required for class detection.").setPositiveButton("Settings") { _, _ -> enableLocationLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }.show()
         } else ensureBluetoothEnabled()
     }
 
@@ -139,32 +133,49 @@ class StudentActivity : AppCompatActivity() {
 
     private fun startBLEScan() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        
         bleScanner = bluetoothAdapter?.bluetoothLeScanner ?: return
         attendanceAttempted = false
         tvStatus.text = "Searching for class..."
         ivStatusIcon.setImageResource(android.R.drawable.stat_sys_data_bluetooth)
         ivStatusIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.brand_accent)
         
-        scanTimeoutRunnable?.let { scanTimeoutHandler.removeCallbacks(it) }
-        scanTimeoutRunnable = Runnable { stopBLEScan(); if (!attendanceAttempted) tvStatus.text = "No session found." }
-        scanTimeoutHandler.postDelayed(scanTimeoutRunnable!!, 20000)
+        handler.postDelayed({ 
+            stopBLEScan()
+            if (!attendanceAttempted) tvStatus.text = "No session found." 
+        }, 20000)
 
-        val filters = listOf(ScanFilter.Builder().setServiceData(SERVICE_UUID, null).build())
+        val filters = listOf<ScanFilter>() 
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                result.scanRecord?.getServiceData(SERVICE_UUID)?.let { processBlePacket(String(it), result.rssi) }
+                // Check Service Data manually (Reliable on all devices)
+                val data = result.scanRecord?.getServiceData(SERVICE_UUID)
+                if (data != null) {
+                    processBlePacket(String(data), result.rssi)
+                }
             }
         }
-        try { bleScanner?.startScan(filters, settings, scanCallback) } catch (e: SecurityException) {}
+        
+        try { 
+            bleScanner?.startScan(filters, settings, scanCallback) 
+        } catch (e: SecurityException) {
+            tvStatus.text = "Permission error."
+        }
     }
 
     private fun stopBLEScan() { 
-        try { bleScanner?.stopScan(scanCallback) } catch (e: Exception) {} 
+        try { 
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                bleScanner?.stopScan(scanCallback) 
+            }
+        } catch (e: Exception) {} 
     }
 
     private fun processBlePacket(packet: String, rssi: Int) {
         if (attendanceAttempted || rssi < -85) return
+        
         val parts = packet.split("|")
         if (parts.size < 4) return
         
@@ -191,56 +202,86 @@ class StudentActivity : AppCompatActivity() {
         if (deptMatches && studentSem == broadcastSem && studentSec.equals(broadcastSec, ignoreCase = true)) {
             attendanceAttempted = true
             stopBLEScan()
-            scanTimeoutRunnable?.let { scanTimeoutHandler.removeCallbacks(it) }
-            markAttendance(sessionId, rssi, !isOnline())
+            runGeofenceCheck(sessionId, rssi)
         }
     }
 
-    private fun markAttendance(sessionId: String, rssi: Int, wasOffline: Boolean) {
+    private fun runGeofenceCheck(sessionId: String, rssi: Int) {
+        tvStatus.text = "Verifying classroom position..."
+        
+        sessionsRef.child(sessionId).get().addOnSuccessListener { snapshot ->
+            val name = snapshot.child("subjectName").value as? String ?: ""
+            val dept = snapshot.child("department").value as? String ?: ""
+            val details = snapshot.child("details").value as? String ?: ""
+            val sem = details.split(" - ").firstOrNull()?.filter { it.isDigit() } ?: ""
+            val sec = details.split(" - ").lastOrNull()?.trim() ?: ""
+            
+            val subjectId = "${name}_${dept}_${sem}_${sec}".replace(Regex("[.#$\\[\\]]"), "_")
+
+            GeofenceValidator.validate(
+                context = this,
+                subjectId = subjectId,
+                sessionId = sessionId,
+                studentUid = FirebaseAuth.getInstance().currentUser?.uid ?: "unknown",
+                rssi = rssi,
+                isPacketValid = true,
+                isTimestampValid = true,
+                onResult = { result ->
+                    runOnUiThread {
+                        when (result.verdict) {
+                            ClassroomBoundaryManager.Verdict.PRESENT -> markAttendance(sessionId, rssi, false)
+                            ClassroomBoundaryManager.Verdict.SUSPECT -> {
+                                markAttendance(sessionId, rssi, true)
+                                AlertDialog.Builder(this).setTitle("⚠️ Weak Signal").setMessage("Attendance flagged. Please move closer.").setPositiveButton("OK", null).show()
+                            }
+                            ClassroomBoundaryManager.Verdict.REJECTED -> {
+                                tvStatus.text = "❌ Outside Classroom"
+                                attendanceAttempted = false
+                            }
+                        }
+                    }
+                },
+                onNoBoundary = { runOnUiThread { markAttendance(sessionId, rssi, false) } },
+                onLocationError = { runOnUiThread { markAttendance(sessionId, rssi, false) } }
+            )
+        }.addOnFailureListener {
+            tvStatus.text = "Verification failed."
+            attendanceAttempted = false
+        }
+    }
+
+    private fun markAttendance(sessionId: String, rssi: Int, isSuspect: Boolean) {
         val prefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
         val usn = prefs.getString("usn", "") ?: return
         val name = prefs.getString("name", "Unknown")
         
-        val data = mapOf("name" to "$name ($usn)", "rssi" to rssi, "zone" to (if (rssi > -60) "Strong" else "Normal"), "timestamp" to ServerValue.TIMESTAMP)
+        val data = mapOf(
+            "name" to "$name ($usn)", 
+            "rssi" to rssi, 
+            "zone" to (if (rssi > -60) "Strong" else "Normal"), 
+            "isSuspect" to isSuspect,
+            "timestamp" to ServerValue.TIMESTAMP
+        )
         
-        if (wasOffline) {
-            getSharedPreferences("OfflineSyncs", MODE_PRIVATE).edit().putBoolean(sessionId, true).apply()
-        }
-
-        rootRef.child("sessions").child(sessionId).child("students").child(usn).setValue(data).addOnCompleteListener { task ->
-            if (task.isSuccessful && getSharedPreferences("OfflineSyncs", MODE_PRIVATE).contains(sessionId)) {
-                showSyncNotification(sessionId)
-                getSharedPreferences("OfflineSyncs", MODE_PRIVATE).edit().remove(sessionId).apply()
-            }
-        }
+        sessionsRef.child(sessionId).child("students").child(usn).setValue(data)
         rootRef.child("attendance_by_student").child(usn).child(sessionId).setValue(true)
         
-        tvStatus.text = if (wasOffline) "✅ Stored Offline (Syncing...)" else "✅ Attendance Marked"
-        if (wasOffline) Toast.makeText(this, "Offline: Stored locally. Open app later to confirm sync.", Toast.LENGTH_LONG).show()
-
+        tvStatus.text = "✅ Attendance Marked"
         ivStatusIcon.setImageResource(android.R.drawable.checkbox_on_background)
         ivStatusIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_success)
         btnMarkAttendance.isEnabled = false
     }
 
-    private fun showSyncNotification(sid: String) {
-        val channelId = "sync_channel_student"
-        val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(channelId, "Attendance Sync", NotificationManager.IMPORTANCE_DEFAULT))
-        }
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Attendance Synced")
-            .setContentText("Your session ($sid) is now on cloud.")
-            .setSmallIcon(R.drawable.ic_secure_attend_logo)
-            .setAutoCancel(true)
-            .build()
-        manager.notify(sid.hashCode(), notification)
-    }
-
     private fun confirmLogout() {
-        AlertDialog.Builder(this).setTitle("Logout").setMessage("Logout?").setPositiveButton("Logout") { _, _ -> getSharedPreferences("UserPrefs", Context.MODE_PRIVATE).edit().clear().apply(); startActivity(Intent(this, MainActivity::class.java)); finish() }.setNegativeButton("Cancel", null).show()
+        AlertDialog.Builder(this).setTitle("Logout").setMessage("Logout from SecureAttend?").setPositiveButton("Logout") { _, _ -> 
+            getSharedPreferences("UserPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+            startActivity(Intent(this, MainActivity::class.java))
+            finish() 
+        }.setNegativeButton("Cancel", null).show()
     }
 
-    override fun onDestroy() { scanTimeoutRunnable?.let { scanTimeoutHandler.removeCallbacks(it) }; stopBLEScan(); super.onDestroy() }
+    override fun onDestroy() {
+        stopBLEScan()
+        super.onDestroy()
+    }
 }

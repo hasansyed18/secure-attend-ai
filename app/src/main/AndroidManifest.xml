@@ -41,7 +41,7 @@
         android:theme="@style/Theme.AutoAttendance">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".SplashActivity"
             android:exported="true"
             android:theme="@style/Theme.AutoAttendance">
             <intent-filter>
@@ -49,6 +49,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AutoAttendance" />
 
         <activity
             android:name=".StudentActivity"
@@ -77,6 +82,11 @@
             android:name=".LecturerAnalyticsActivity"
             android:exported="false"
             android:label="Class Analytics" />
+
+        <activity
+            android:name=".geofence.BoundarySetupActivity"
+            android:label="Setup Classroom Boundary"
+            android:screenOrientation="portrait" />
 
         <activity android:name=".LecturerLoginActivity" />
         <activity android:name=".LecturerRegisterActivity" />

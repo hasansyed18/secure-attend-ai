@@ -14,35 +14,34 @@ import java.util.*
 
 class BleAdvertisingService : Service() {
 
-    private val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var bleAdvertiser: BluetoothLeAdvertiser? = null
     
-    // Efficient 16-bit UUID: 0xFEAF
+    // ⚡ Industry standard 16-bit short UUID for "FEAF"
+    // This saves 14 bytes per packet, allowing us to fit all metadata
     private val SERVICE_UUID = ParcelUuid.fromString("0000FEAF-0000-1000-8000-00805F9B34FB")
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val sid = intent?.getStringExtra("SESSION_ID") ?: "Unknown"
+        startForeground(1, createNotification(sid))
+
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val adapter = bluetoothManager.adapter
 
-        if (adapter == null || !adapter.isEnabled) {
+        if (adapter == null || !adapter.isEnabled || intent == null) {
             stopSelf()
             return START_NOT_STICKY
         }
 
         bleAdvertiser = adapter.bluetoothLeAdvertiser
-        val sessionId = intent?.getStringExtra("SESSION_ID") ?: return START_NOT_STICKY
+        val sessionId = intent.getStringExtra("SESSION_ID") ?: run { stopSelf(); return START_NOT_STICKY }
         val dept = intent.getStringExtra("DEPT") ?: "XX"
         val sem = intent.getStringExtra("SEM") ?: "0"
-        val section = intent.getStringExtra("SECTION") ?: "X"
+        val sec = intent.getStringExtra("SECTION") ?: "X"
 
-        // Construct a compact packet to fit in BLE limits (max ~26 bytes for service data)
-        // Format: DEPT|SEM|SEC|SESSION_ID
-        val packet = "$dept|$sem|$section|$sessionId"
+        // Compact Protocol: Dept|Sem|Sec|SessionID
+        val packet = "$dept|$sem|$sec|$sessionId"
         
-        startForeground(1, createNotification(sessionId))
         startAdvertising(packet)
-        
-        timeoutHandler.postDelayed({ stopSelf() }, 600000) 
         return START_STICKY
     }
 
@@ -55,7 +54,7 @@ class BleAdvertisingService : Service() {
 
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
-            .addServiceUuid(SERVICE_UUID)
+            // By using addServiceData with a 16-bit UUID format, we fit everything in 31 bytes
             .addServiceData(SERVICE_UUID, packet.toByteArray())
             .build()
 
@@ -63,25 +62,26 @@ class BleAdvertisingService : Service() {
             bleAdvertiser?.stopAdvertising(advertiseCallback)
             bleAdvertiser?.startAdvertising(settings, data, advertiseCallback)
         } catch (e: Exception) {
-            Log.e("BLE", "Error: ${e.message}")
+            Log.e("BLE", "Start advertising error: ${e.message}")
         }
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { Log.d("BLE", "Broadcasting packet") }
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { Log.d("BLE", "Broadcasting successfully") }
         override fun onStartFailure(errorCode: Int) { Log.e("BLE", "Failed: $errorCode") }
     }
 
     private fun createNotification(sid: String): Notification {
         val channelId = "attendance_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "Attendance", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, "Attendance Live", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Attendance Active")
-            .setContentText("Broadcasting session ID: $sid")
-            .setSmallIcon(R.drawable.ic_secure_attend_logo)
+            .setContentTitle("Broadcasting Class Session")
+            .setContentText("ID: $sid")
+            .setSmallIcon(R.drawable.ic_attendit_logo)
+            .setOngoing(true)
             .build()
     }
 
@@ -89,7 +89,6 @@ class BleAdvertisingService : Service() {
 
     override fun onDestroy() {
         try { bleAdvertiser?.stopAdvertising(advertiseCallback) } catch (_: Exception) {}
-        timeoutHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 }

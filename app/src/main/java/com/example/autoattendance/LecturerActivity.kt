@@ -15,11 +15,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelUuid
 import android.provider.Settings
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AnimationUtils
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -28,6 +32,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.autoattendance.Subject
+import com.example.autoattendance.geofence.BoundarySetupActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import java.io.File
@@ -41,7 +46,10 @@ class LecturerActivity : AppCompatActivity() {
         const val TAG = "LecturerActivity"
         const val PREFS_NAME = "LecturerSession"
         const val KEY_SESSION_ID = "active_session_id"
-        const val OFFLINE_SYNC_PREFS = "OfflineSyncQueue"
+        const val KEY_SUBJECT_NAME = "active_subject_name"
+        const val KEY_DEPT = "active_dept"
+        const val KEY_SEM = "active_sem"
+        const val KEY_SEC = "active_sec"
     }
 
     private lateinit var tvSystemStatus: TextView
@@ -59,10 +67,10 @@ class LecturerActivity : AppCompatActivity() {
     private lateinit var btnAddSubject: Button
     private lateinit var btnExportCsv: Button
     private lateinit var btnViewAnalytics: Button
+    private lateinit var btnSetupBoundary: Button
 
     private lateinit var customAdapter: StudentListAdapter
     private val detectionList = mutableListOf<StudentDetection>()
-    private val attendanceDataList = mutableListOf<Map<String, Any>>()
 
     private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
     private val database: FirebaseDatabase by lazy { FirebaseDatabase.getInstance() }
@@ -73,8 +81,8 @@ class LecturerActivity : AppCompatActivity() {
     private var sessionListener: ValueEventListener? = null
 
     data class StudentDetection(
-        val name: String,
         val usn: String,
+        val studentName: String,
         val rssi: Int,
         val timestamp: Long,
         val isSuspect: Boolean
@@ -83,11 +91,8 @@ class LecturerActivity : AppCompatActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions.entries.all { it.value }) {
-            checkBluetoothAndStart()
-        } else {
-            Toast.makeText(this, "Permissions denied.", Toast.LENGTH_SHORT).show()
-        }
+        if (permissions.values.all { it }) checkBluetoothAndStart()
+        else Toast.makeText(this, "Permissions required.", Toast.LENGTH_SHORT).show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,48 +125,41 @@ class LecturerActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        tvSystemStatus = findViewById(R.id.tvSystemStatus)
-        statusDot = findViewById(R.id.statusDot)
-        tvPresentCountLarge = findViewById(R.id.tvPresentCountLarge)
-        tvAttendanceRate = findViewById(R.id.tvAttendanceRate)
-        tvSuspiciousCount = findViewById(R.id.tvSuspiciousCount)
-        tvActiveSubjectName = findViewById(R.id.tvActiveSubjectName)
-        tvActiveSessionDetails = findViewById(R.id.tvActiveSessionDetails)
-        tvLiveIndicator = findViewById(R.id.tvLiveIndicator)
-
-        lvStudentList = findViewById(R.id.lvStudentList)
-        btnStartClass = findViewById(R.id.btnStartClass)
-        btnStopClass = findViewById(R.id.btnStopClass)
-        btnAddSubject = findViewById(R.id.btnAddSubject)
-        btnExportCsv = findViewById(R.id.btnExportCsv)
-        btnViewAnalytics = findViewById(R.id.btnViewAnalytics)
-
-        customAdapter = StudentListAdapter(this, detectionList)
-        lvStudentList.adapter = customAdapter
-
+        tvSystemStatus = findViewById(R.id.tvSystemStatus); statusDot = findViewById(R.id.statusDot)
+        tvPresentCountLarge = findViewById(R.id.tvPresentCountLarge); tvAttendanceRate = findViewById(R.id.tvAttendanceRate)
+        tvSuspiciousCount = findViewById(R.id.tvSuspiciousCount); tvActiveSubjectName = findViewById(R.id.tvActiveSubjectName)
+        tvActiveSessionDetails = findViewById(R.id.tvActiveSessionDetails); tvLiveIndicator = findViewById(R.id.tvLiveIndicator)
+        lvStudentList = findViewById(R.id.lvStudentList); btnStartClass = findViewById(R.id.btnStartClass)
+        btnStopClass = findViewById(R.id.btnStopClass); btnAddSubject = findViewById(R.id.btnAddSubject)
+        btnExportCsv = findViewById(R.id.btnExportCsv); btnViewAnalytics = findViewById(R.id.btnViewAnalytics)
+        btnSetupBoundary = findViewById(R.id.btnSetupBoundary)
+        
+        customAdapter = StudentListAdapter(this, detectionList); lvStudentList.adapter = customAdapter
+        
         btnStartClass.setOnClickListener { startClassProcess() }
         btnStopClass.setOnClickListener { stopClassSession() }
         btnAddSubject.setOnClickListener { openAddSubjectDialog() }
         btnExportCsv.setOnClickListener { exportAttendanceToCsv() }
         btnViewAnalytics.setOnClickListener { showAnalyticsDialog() }
+        btnSetupBoundary.setOnClickListener { showSubjectForBoundary() }
+
+        // Animation: Fade in the dashboard
+        findViewById<View>(android.R.id.content).alpha = 0f
+        findViewById<View>(android.R.id.content).animate().alpha(1f).setDuration(500).start()
     }
 
     private fun startClassProcess() {
-        val requiredPermissions = mutableListOf<String>()
+        val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN)
-            requiredPermissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-            requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-            requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            required.addAll(listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS))
         }
-        requiredPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
-        val missing = requiredPermissions.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        val missing = required.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) checkBluetoothAndStart() else requestPermissionLauncher.launch(missing.toTypedArray())
     }
 
     private fun checkBluetoothAndStart() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        if (bluetoothManager.adapter == null || !bluetoothManager.adapter.isEnabled) {
+        if (bluetoothManager.adapter?.isEnabled != true) {
             Toast.makeText(this, "Enable Bluetooth first", Toast.LENGTH_SHORT).show()
             return
         }
@@ -172,7 +170,18 @@ class LecturerActivity : AppCompatActivity() {
         val sessionId = "S${System.currentTimeMillis()}"
         currentSessionId = sessionId
         
-        val sessionData = hashMapOf(
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString(KEY_SESSION_ID, sessionId)
+            .putString(KEY_SUBJECT_NAME, subject.subjectName)
+            .putString(KEY_DEPT, subject.department)
+            .putString(KEY_SEM, subject.semester)
+            .putString(KEY_SEC, subject.section)
+            .apply()
+        
+        tvActiveSubjectName.text = subject.subjectName
+        tvActiveSessionDetails.text = "${subject.department} • Sem ${subject.semester} • Sec ${subject.section}"
+
+        val sessionData = hashMapOf<String, Any>(
             "isActive" to true, 
             "lecturerUid" to (auth.currentUser?.uid ?: ""), 
             "subjectName" to subject.subjectName, 
@@ -180,57 +189,21 @@ class LecturerActivity : AppCompatActivity() {
             "startTime" to ServerValue.TIMESTAMP, 
             "details" to "${subject.semester} - ${subject.section}"
         )
-
-        val isOff = !isOnline()
-        if (isOff) {
-            getSharedPreferences(OFFLINE_SYNC_PREFS, MODE_PRIVATE).edit().putBoolean(sessionId, true).apply()
-            Toast.makeText(this, "Offline Mode: Session will sync when internet returns.", Toast.LENGTH_LONG).show()
-        }
-
-        sessionsRef.child(sessionId).setValue(sessionData).addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                val syncQueue = getSharedPreferences(OFFLINE_SYNC_PREFS, MODE_PRIVATE)
-                if (syncQueue.contains(sessionId)) {
-                    showSyncNotification(sessionId, subject.subjectName)
-                    syncQueue.edit().remove(sessionId).apply()
-                }
-            }
-        }
+        sessionsRef.child(sessionId).setValue(sessionData)
         database.reference.child("current_session").setValue(sessionId)
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_SESSION_ID, sessionId).apply()
 
-        tvActiveSubjectName.text = subject.subjectName
-        tvActiveSessionDetails.text = "${subject.department} • Sem ${subject.semester} • Sec ${subject.section}"
-
+        // START ADVERTISING
         val deptCode = when(subject.department) { "CSE" -> "CS"; "AI" -> "AI"; "EEE" -> "EE"; "ECE" -> "EC"; "Mechanical" -> "ME"; "Civil" -> "CV"; else -> "XX" }
         val intent = Intent(this, BleAdvertisingService::class.java).apply { 
             putExtra("SESSION_ID", sessionId)
-            putExtra("SUBJECT", subject.subjectName)
             putExtra("DEPT", deptCode)
-            putExtra("SEM", subject.semester.filter { it.isDigit() })
+            putExtra("SEM", subject.semester)
             putExtra("SECTION", subject.section)
         }
         ContextCompat.startForegroundService(this, intent)
+        
         updateUiActive(true)
         listenForAttendance(sessionId)
-    }
-
-    private fun showSyncNotification(sid: String, subjectName: String) {
-        val channelId = "sync_channel"
-        val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(channelId, "Data Sync", NotificationManager.IMPORTANCE_HIGH))
-        }
-        val intent = Intent(this, LecturerActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, sid.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE)
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Attendance Synced: $subjectName")
-            .setContentText("Offline session data is now on cloud. Open to export.")
-            .setSmallIcon(R.drawable.ic_secure_attend_logo)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
-        manager.notify(sid.hashCode(), notification)
     }
 
     private fun stopClassSession() {
@@ -240,9 +213,8 @@ class LecturerActivity : AppCompatActivity() {
         sessionListener = null
         sessionsRef.child(sessionId).child("isActive").setValue(false)
         database.reference.child("current_session").removeValue()
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(KEY_SESSION_ID).apply()
-        updateUiActive(false)
-        btnExportCsv.visibility = View.VISIBLE
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().clear().apply()
+        currentSessionId = null; updateUiActive(false); btnExportCsv.visibility = View.VISIBLE
     }
 
     private fun listenForAttendance(sessionId: String) {
@@ -252,7 +224,6 @@ class LecturerActivity : AppCompatActivity() {
             @SuppressLint("SetTextI18n")
             override fun onDataChange(snapshot: DataSnapshot) {
                 detectionList.clear()
-                attendanceDataList.clear()
                 var suspectCount = 0
                 for (child in snapshot.children) {
                     val fullName = child.child("name").getValue(String::class.java) ?: "Unknown"
@@ -262,8 +233,7 @@ class LecturerActivity : AppCompatActivity() {
                     if (isSuspect) suspectCount++
                     val namePart = fullName.substringBefore(" (")
                     val usnPart = fullName.substringAfter("(", "").replace(")", "")
-                    detectionList.add(StudentDetection(namePart, usnPart, rssi, timestamp, isSuspect))
-                    attendanceDataList.add(mutableMapOf("name" to fullName, "timestamp" to timestamp, "zone" to (child.child("zone").value ?: "")))
+                    detectionList.add(StudentDetection(usnPart, namePart, rssi, timestamp, isSuspect))
                 }
                 detectionList.sortByDescending { it.timestamp }
                 customAdapter.notifyDataSetChanged()
@@ -281,53 +251,32 @@ class LecturerActivity : AppCompatActivity() {
             val online = isOnline()
             tvSystemStatus.text = if (online) "System Active" else "System Active (Offline)"
             statusDot.backgroundTintList = ContextCompat.getColorStateList(this, if(online) R.color.status_success else R.color.status_warning)
-            btnStartClass.visibility = View.GONE
-            btnStopClass.visibility = View.VISIBLE
-            tvLiveIndicator.visibility = View.VISIBLE
-            btnExportCsv.visibility = View.GONE
+            btnStartClass.visibility = View.GONE; btnStopClass.visibility = View.VISIBLE; tvLiveIndicator.visibility = View.VISIBLE
         } else {
-            tvSystemStatus.text = "System Inactive"
-            statusDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.text_secondary)
-            btnStartClass.visibility = View.VISIBLE
-            btnStopClass.visibility = View.GONE
-            tvLiveIndicator.visibility = View.GONE
-            tvActiveSubjectName.text = "No Active Session"
-            tvActiveSessionDetails.text = "Choose a subject to begin"
+            tvSystemStatus.text = "System Inactive"; statusDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.text_secondary)
+            btnStartClass.visibility = View.VISIBLE; btnStopClass.visibility = View.GONE; tvLiveIndicator.visibility = View.GONE
         }
     }
 
     private fun restoreSession() {
-        val savedId = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_SESSION_ID, null) ?: return
-        sessionsRef.child(savedId).addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (snapshot.child("isActive").getValue(Boolean::class.java) == true) {
-                    currentSessionId = savedId
-                    tvActiveSubjectName.text = snapshot.child("subjectName").getValue(String::class.java) ?: "Active Session"
-                    tvActiveSessionDetails.text = snapshot.child("details").getValue(String::class.java) ?: ""
-                    updateUiActive(true)
-                    listenForAttendance(savedId)
-                } else {
-                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(KEY_SESSION_ID).apply()
-                }
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val savedId = prefs.getString(KEY_SESSION_ID, null) ?: return
+        currentSessionId = savedId
+        val subName = prefs.getString(KEY_SUBJECT_NAME, "Active Session")
+        tvActiveSubjectName.text = subName
+        updateUiActive(true); listenForAttendance(savedId)
     }
 
     private fun exportAttendanceToCsv() {
         if (detectionList.isEmpty()) return
-        val csvContent = StringBuilder("Student Name,USN,Timestamp,Zone\n")
+        val csvContent = StringBuilder("Student Name,USN,Timestamp,RSSI\n")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        for (student in detectionList) {
-            val time = if (student.timestamp > 0) dateFormat.format(Date(student.timestamp)) else "N/A"
-            csvContent.append("\"${student.name}\",${student.usn},$time,${if(student.rssi > -60) "Strong" else "Normal"}\n")
-        }
+        for (student in detectionList) { csvContent.append("\"${student.studentName}\",${student.usn},${dateFormat.format(Date(student.timestamp))},${student.rssi}\n") }
         try {
-            val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Attendance_${System.currentTimeMillis()}.csv")
+            val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "SecureAttend_Report_${System.currentTimeMillis()}.csv")
             FileOutputStream(file).apply { write(csvContent.toString().toByteArray()); close() }
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/csv"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }, "Share Report"))
-        } catch (e: Exception) { Toast.makeText(this, "Export failed", Toast.LENGTH_SHORT).show() }
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/csv"; putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(this@LecturerActivity, "$packageName.fileprovider", file)); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }, "Share Report"))
+        } catch (e: Exception) {}
     }
 
     private fun showAnalyticsDialog() {
@@ -335,9 +284,8 @@ class LecturerActivity : AppCompatActivity() {
         subjectsRef.child(uid).addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val subjects = snapshot.children.mapNotNull { it.getValue(Subject::class.java) }
-                if (subjects.isEmpty()) return
                 val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
-                AlertDialog.Builder(this@LecturerActivity).setTitle("Select Subject for Analytics").setItems(displayNames) { _, index ->
+                AlertDialog.Builder(this@LecturerActivity).setTitle("Select for Analytics").setItems(displayNames) { _, index ->
                     val s = subjects[index]
                     startActivity(Intent(this@LecturerActivity, LecturerAnalyticsActivity::class.java).apply { putExtra("SUBJECT_NAME", s.subjectName); putExtra("DEPT", s.department); putExtra("SEM", s.semester); putExtra("SECTION", s.section) })
                 }.show()
@@ -350,10 +298,48 @@ class LecturerActivity : AppCompatActivity() {
         val uid = auth.currentUser?.uid ?: return
         subjectsRef.child(uid).addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val subjects = snapshot.children.mapNotNull { it.getValue(Subject::class.java) }
+                val subjects = mutableListOf<Subject>()
+                val subjectKeys = mutableListOf<String>()
+                snapshot.children.forEach { 
+                    it.getValue(Subject::class.java)?.let { sub -> subjects.add(sub); subjectKeys.add(it.key ?: "") }
+                }
+                if (subjects.isEmpty()) { Toast.makeText(this@LecturerActivity, "Add a subject first", Toast.LENGTH_SHORT).show(); return }
+                val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
+                AlertDialog.Builder(this@LecturerActivity).setTitle("Select Subject").setItems(displayNames) { _, index -> showSubjectOptions(subjects[index], subjectKeys[index]) }.show()
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    private fun showSubjectOptions(subject: Subject, key: String) {
+        AlertDialog.Builder(this).setTitle(subject.subjectName).setItems(arrayOf("Start Class Session", "Delete Subject")) { _, which ->
+            if (which == 0) activateClassSession(subject) else deleteSubject(key)
+        }.show()
+    }
+
+    private fun deleteSubject(key: String) {
+        val uid = auth.currentUser?.uid ?: return
+        AlertDialog.Builder(this).setTitle("Delete Subject?").setMessage("Permanently remove this subject?").setPositiveButton("Delete") { _, _ ->
+            subjectsRef.child(uid).child(key).removeValue().addOnSuccessListener { Toast.makeText(this, "Subject Deleted", Toast.LENGTH_SHORT).show() }
+        }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun showSubjectForBoundary() {
+        val uid = auth.currentUser?.uid ?: return
+        subjectsRef.child(uid).addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val subjects = mutableListOf<Subject>()
+                val subjectKeys = mutableListOf<String>()
+                snapshot.children.forEach { it.getValue(Subject::class.java)?.let { sub -> subjects.add(sub); subjectKeys.add(it.key ?: "") } }
                 if (subjects.isEmpty()) return
                 val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
-                AlertDialog.Builder(this@LecturerActivity).setTitle("Select Subject").setItems(displayNames) { _, index -> activateClassSession(subjects[index]) }.show()
+                AlertDialog.Builder(this@LecturerActivity).setTitle("Select for Boundary").setItems(displayNames) { _, index ->
+                    val intent = Intent(this@LecturerActivity, BoundarySetupActivity::class.java).apply {
+                        putExtra(BoundarySetupActivity.EXTRA_SUBJECT_ID, subjectKeys[index])
+                        putExtra(BoundarySetupActivity.EXTRA_CLASSROOM_NAME, subjects[index].subjectName)
+                    }
+                    startActivity(intent)
+                }.show()
             }
             override fun onCancelled(error: DatabaseError) {}
         })
@@ -366,37 +352,37 @@ class LecturerActivity : AppCompatActivity() {
         val spinnerSem = dialogView.findViewById<Spinner>(R.id.spinnerSemester).apply { adapter = ArrayAdapter(this@LecturerActivity, android.R.layout.simple_spinner_dropdown_item, arrayOf("SEM-1","SEM-2","SEM-3","SEM-4","SEM-5","SEM-6","SEM-7","SEM-8")) }
         val etSection = dialogView.findViewById<EditText>(R.id.etSection)
         AlertDialog.Builder(this).setTitle("Add Subject").setView(dialogView).setPositiveButton("Save") { _, _ ->
-            val sId = subjectsRef.child(auth.currentUser?.uid ?: "").push().key ?: return@setPositiveButton
-            subjectsRef.child(auth.currentUser?.uid ?: "").child(sId).setValue(Subject(etSubject.text.toString(), spinnerDept.selectedItem.toString(), spinnerSem.selectedItem.toString().replace("SEM-",""), etSection.text.toString())).addOnSuccessListener {
-                Toast.makeText(this, "Subject Added Successfully", Toast.LENGTH_SHORT).show()
-            }
+            val uid = auth.currentUser?.uid ?: return@setPositiveButton
+            val name = etSubject.text.toString().trim()
+            val dept = spinnerDept.selectedItem.toString()
+            val sem = spinnerSem.selectedItem.toString().replace("SEM-", "")
+            val section = etSection.text.toString().trim().uppercase()
+            if (name.isEmpty() || section.isEmpty()) return@setPositiveButton
+            val uniqueKey = "${name}_${dept}_${sem}_${section}".replace(Regex("[.#$\\[\\]]"), "_")
+            subjectsRef.child(uid).child(uniqueKey).setValue(Subject(name, dept, sem, section)).addOnSuccessListener { Toast.makeText(this, "Added Successfully", Toast.LENGTH_SHORT).show() }
         }.setNegativeButton("Cancel", null).show()
     }
 
-    private inner class StudentListAdapter(context: Context, private val students: List<StudentDetection>) : 
-        ArrayAdapter<StudentDetection>(context, 0, students) {
+    private inner class StudentListAdapter(context: Context, private val students: List<StudentDetection>) : ArrayAdapter<StudentDetection>(context, 0, students) {
         @SuppressLint("SetTextI18n")
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.student_list_item, parent, false)
             val student = students[position]
-            val tvName = view.findViewById<TextView>(R.id.tvStudentName)
-            val tvUsn = view.findViewById<TextView>(R.id.tvStudentUsn)
-            val tvInitials = view.findViewById<TextView>(R.id.tvStudentInitials)
-            val tvRssi = view.findViewById<TextView>(R.id.tvRssiBadge)
-            val tvTime = view.findViewById<TextView>(R.id.tvDetectionTime)
-            tvName.text = student.name
-            tvUsn.text = student.usn
-            tvInitials.text = student.name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
-            tvRssi.text = "${student.rssi} dBm"
-            tvTime.text = SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(Date(student.timestamp))
-            if (student.isSuspect) { tvRssi.backgroundTintList = ContextCompat.getColorStateList(context, R.color.signal_weak); tvRssi.setTextColor(Color.WHITE) } 
-            else { tvRssi.backgroundTintList = ContextCompat.getColorStateList(context, R.color.signal_strong); tvRssi.setTextColor(Color.WHITE) }
+            view.findViewById<TextView>(R.id.tvStudentName).text = student.studentName; view.findViewById<TextView>(R.id.tvStudentUsn).text = student.usn; view.findViewById<TextView>(R.id.tvStudentInitials).text = student.studentName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
+            val badge = view.findViewById<TextView>(R.id.tvRssiBadge); badge.text = "${student.rssi} dBm"
+            if (student.isSuspect) { badge.backgroundTintList = ContextCompat.getColorStateList(context, R.color.signal_weak); badge.setTextColor(Color.WHITE) } 
+            else { badge.backgroundTintList = ContextCompat.getColorStateList(context, R.color.signal_strong); badge.setTextColor(Color.WHITE) }
+            
+            // Animation for list items
+            view.translationX = 100f
+            view.alpha = 0f
+            view.animate().translationX(0f).alpha(1f).setDuration(300).setStartDelay(position * 50L).start()
+            
             return view
         }
     }
 
-    override fun onDestroy() {
-        currentSessionId?.let { sid -> sessionListener?.let { sessionsRef.child(sid).child("students").removeEventListener(it) } }
-        super.onDestroy()
+    override fun onDestroy() { 
+        super.onDestroy() 
     }
 }
