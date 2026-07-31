@@ -7,13 +7,11 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.*
 import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
-import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.Button
@@ -23,11 +21,15 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.content.ContextCompat
-import com.example.autoattendance.geofence.GeofenceValidator
-import com.example.autoattendance.geofence.ClassroomBoundaryManager
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
+import com.example.autoattendance.ui.Screen
+import com.example.autoattendance.ui.components.AppDrawer
+import com.example.autoattendance.ui.theme.AutoAttendanceTheme
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.*
+import com.google.firebase.firestore.FirebaseFirestore
 import java.util.*
 
 class StudentActivity : AppCompatActivity() {
@@ -41,35 +43,33 @@ class StudentActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var ivStatusIcon: ImageView
     private lateinit var btnMarkAttendance: Button
-    private lateinit var btnViewHistory: Button
-    private lateinit var btnLogout: ImageView
+    private lateinit var btnMenu: ImageView
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var drawerComposeView: ComposeView
     private lateinit var tvStudentName: TextView
     private lateinit var tvStudentUsn: TextView
     private lateinit var tvStudentInitials: TextView
+    private lateinit var tvStudentDetails: TextView
 
-    private val database = FirebaseDatabase.getInstance()
-    private val sessionsRef = database.reference.child("sessions")
-    private val rootRef = database.reference
+    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private var institutionId: String? = null
 
     private val SERVICE_UUID = ParcelUuid.fromString("0000FEAF-0000-1000-8000-00805F9B34FB")
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         if (permissions.values.all { it }) {
-            Handler(Looper.getMainLooper()).postDelayed({ checkLocationEnabledAndProceed() }, 500)
-        } else { Toast.makeText(this, "Permissions are required for scanning.", Toast.LENGTH_SHORT).show() }
+            ensureBluetoothEnabled()
+        } else { Toast.makeText(this, "Bluetooth permissions are required for scanning.", Toast.LENGTH_SHORT).show() }
     }
 
     private val enableBluetoothLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (bluetoothAdapter?.isEnabled == true) startBLEScan() else tvStatus.text = "Please enable Bluetooth."
     }
 
-    private val enableLocationLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        checkLocationEnabledAndProceed()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val userPrefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
+        val userPrefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
         if (userPrefs.getString("role", null) != "student") { 
             startActivity(Intent(this, StudentLoginActivity::class.java))
             finish()
@@ -77,17 +77,56 @@ class StudentActivity : AppCompatActivity() {
         }
         
         setContentView(R.layout.activity_student)
+        institutionId = userPrefs.getString("institutionId", null)
+        
         initViews(userPrefs)
         
-        bluetoothAdapter = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
-        
-        btnMarkAttendance.setOnClickListener { checkPermissionsAndProcess() }
-        btnViewHistory.setOnClickListener { startActivity(Intent(this, AttendanceHistoryActivity::class.java)) }
-        btnLogout.setOnClickListener { confirmLogout() }
+        bluetoothAdapter = (getSystemService(BLUETOOTH_SERVICE) as BluetoothManager).adapter
+        btnMarkAttendance.setOnClickListener { 
+            Log.d("AttendanceFlow", "Mark Attendance button clicked")
+            checkPermissionsAndProcess() 
+        }
+        btnMenu.setOnClickListener { drawerLayout.openDrawer(GravityCompat.START) }
+        drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
 
-        // Entrance Animation
+        setupDrawer(userPrefs)
+
         findViewById<View>(android.R.id.content).alpha = 0f
         findViewById<View>(android.R.id.content).animate().alpha(1f).setDuration(500).start()
+    }
+
+    private fun setupDrawer(prefs: SharedPreferences) {
+        val name = prefs.getString("name", "User") ?: "User"
+        val email = prefs.getString("email", "") ?: ""
+        val role = prefs.getString("role", "student") ?: "student"
+
+        drawerComposeView.setContent {
+            AutoAttendanceTheme {
+                AppDrawer(
+                    currentRoute = Screen.Dashboard.route,
+                    onNavigate = { screen ->
+                        drawerLayout.closeDrawer(GravityCompat.START)
+                        handleNavigation(screen)
+                    },
+                    userName = name,
+                    userEmail = email,
+                    userRole = role
+                )
+            }
+        }
+    }
+
+    private fun handleNavigation(screen: Screen) {
+        when (screen) {
+            Screen.Dashboard -> { /* Already here */ }
+            Screen.Logout -> confirmLogout()
+            else -> {
+                val intent = Intent(this, HomeActivity::class.java).apply {
+                    putExtra("TARGET_SCREEN", screen.route)
+                }
+                startActivity(intent)
+            }
+        }
     }
 
     @SuppressLint("SetTextI18n")
@@ -95,34 +134,44 @@ class StudentActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         ivStatusIcon = findViewById(R.id.ivStatusIcon)
         btnMarkAttendance = findViewById(R.id.btnMarkAttendance)
-        btnViewHistory = findViewById(R.id.btnViewHistory)
-        btnLogout = findViewById(R.id.btnLogout)
+        btnMenu = findViewById(R.id.btnMenu)
+        drawerLayout = findViewById(R.id.drawerLayout)
+        drawerComposeView = findViewById(R.id.drawerComposeView)
         tvStudentName = findViewById(R.id.tvStudentName)
         tvStudentUsn = findViewById(R.id.tvStudentUsn)
         tvStudentInitials = findViewById(R.id.tvStudentInitials)
+        tvStudentDetails = findViewById(R.id.tvStudentDetails)
+        refreshProfileUI(prefs)
+    }
 
+    @SuppressLint("SetTextI18n")
+    private fun refreshProfileUI(prefs: SharedPreferences) {
         val name = prefs.getString("name", "Student") ?: "Student"
         val usn = prefs.getString("usn", "---") ?: "---"
-        
+        val dept = prefs.getString("department", "---") ?: "---"
+        val sem = prefs.getString("semester", "---") ?: "---"
+        val sec = prefs.getString("section", "---") ?: "---"
         tvStudentName.text = name
         tvStudentUsn.text = "USN: $usn"
-        tvStudentInitials.text = name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
+        tvStudentInitials.text = name.split(" ").asSequence().mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
+        tvStudentDetails.text = "$dept | Sem $sem | Sec $sec"
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshProfileUI(getSharedPreferences("UserPrefs", MODE_PRIVATE))
     }
 
     private fun checkPermissionsAndProcess() {
-        val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        val required = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { 
             required.addAll(listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)) 
+        } else {
+            required.add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
+        
         val missing = required.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isEmpty()) checkLocationEnabledAndProceed() else requestPermissionLauncher.launch(missing.toTypedArray())
-    }
-
-    private fun checkLocationEnabledAndProceed() {
-        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            AlertDialog.Builder(this).setTitle("Location Required").setMessage("GPS is required for class detection.").setPositiveButton("Settings") { _, _ -> enableLocationLauncher.launch(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }.show()
-        } else ensureBluetoothEnabled()
+        if (missing.isEmpty()) ensureBluetoothEnabled() else requestPermissionLauncher.launch(missing.toTypedArray())
     }
 
     private fun ensureBluetoothEnabled() {
@@ -132,156 +181,127 @@ class StudentActivity : AppCompatActivity() {
     }
 
     private fun startBLEScan() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-        
         bleScanner = bluetoothAdapter?.bluetoothLeScanner ?: return
+        
+        Log.d("AttendanceFlow", "Bluetooth scan started (BLE-only)")
         attendanceAttempted = false
-        tvStatus.text = "Searching for class..."
+        tvStatus.text = "Searching for classroom beacon..."
         ivStatusIcon.setImageResource(android.R.drawable.stat_sys_data_bluetooth)
         ivStatusIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.brand_accent)
         
         handler.postDelayed({ 
-            stopBLEScan()
-            if (!attendanceAttempted) tvStatus.text = "No session found." 
-        }, 20000)
+            if (!attendanceAttempted) {
+                stopBLEScan()
+                tvStatus.text = "Classroom beacon not found."
+                Log.d("AttendanceFlow", "Scan timeout: Beacon not found")
+            }
+        }, 10000)
 
-        val filters = listOf<ScanFilter>() 
-        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                // Check Service Data manually (Reliable on all devices)
-                val data = result.scanRecord?.getServiceData(SERVICE_UUID)
-                if (data != null) {
-                    processBlePacket(String(data), result.rssi)
+                result.scanRecord?.getServiceData(SERVICE_UUID)?.let { 
+                    processBlePacket(String(it), result.rssi) 
                 }
             }
         }
-        
         try { 
-            bleScanner?.startScan(filters, settings, scanCallback) 
-        } catch (e: SecurityException) {
-            tvStatus.text = "Permission error."
+            bleScanner?.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCallback) 
+        } catch (e: SecurityException) { 
+            tvStatus.text = "Bluetooth permission error." 
+            Log.e("AttendanceFlow", "Scan failed: SecurityException")
         }
     }
 
     private fun stopBLEScan() { 
         try { 
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
                 bleScanner?.stopScan(scanCallback) 
+                Log.d("AttendanceFlow", "Bluetooth scan stopped")
             }
-        } catch (e: Exception) {} 
+        } catch (e: Exception) {
+            Log.e("AttendanceFlow", "Error stopping scan", e)
+        } 
     }
 
     private fun processBlePacket(packet: String, rssi: Int) {
-        if (attendanceAttempted || rssi < -85) return
+        if (attendanceAttempted) return
         
         val parts = packet.split("|")
-        if (parts.size < 4) return
+        if (parts.size < 5) return
         
-        val broadcastDept = parts[0]
-        val broadcastSem = parts[1]
-        val broadcastSec = parts[2]
-        val sessionId = parts[3]
-
+        val bDept = parts[0]; val bSem = parts[1]; val bSec = parts[2]; val bBatch = parts[3]; val sessionId = parts[4]
         val prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
-        val studentDept = prefs.getString("department", "") ?: ""
-        val studentSem = prefs.getString("semester", "")?.filter { it.isDigit() } ?: ""
-        val studentSec = prefs.getString("section", "") ?: ""
-
-        val deptMatches = when(studentDept) {
-            "CSE" -> broadcastDept == "CS" || broadcastDept == "CSE"
-            "AI" -> broadcastDept == "AI"
-            "EEE" -> broadcastDept == "EE" || broadcastDept == "EEE"
-            "ECE" -> broadcastDept == "EC" || broadcastDept == "ECE"
-            "Mechanical" -> broadcastDept == "ME" || broadcastDept == "Mechanical"
-            "Civil" -> broadcastDept == "CV" || broadcastDept == "Civil"
-            else -> broadcastDept.equals(studentDept, ignoreCase = true)
-        }
-
-        if (deptMatches && studentSem == broadcastSem && studentSec.equals(broadcastSec, ignoreCase = true)) {
-            attendanceAttempted = true
-            stopBLEScan()
-            runGeofenceCheck(sessionId, rssi)
+        val sDept = prefs.getString("department", "") ?: ""
+        val sSem = prefs.getString("semester", "") ?: ""
+        val sSec = prefs.getString("section", "") ?: ""
+        val sBatch = prefs.getInt("batch", 0).toString()
+        
+        if (sDept.startsWith(bDept) && sSem == bSem && sSec.equals(bSec, ignoreCase = true) && sBatch == bBatch) {
+            if (rssi >= -85) {
+                Log.d("AttendanceFlow", "Class beacon detected: $sessionId (RSSI: $rssi)")
+                attendanceAttempted = true
+                stopBLEScan()
+                resolveSubjectAndMark(sessionId, rssi)
+            }
         }
     }
 
-    private fun runGeofenceCheck(sessionId: String, rssi: Int) {
-        tvStatus.text = "Verifying classroom position..."
+    private fun resolveSubjectAndMark(sessionId: String, rssi: Int) {
+        val instId = institutionId ?: return
+        tvStatus.text = "Verifying class details..."
         
-        sessionsRef.child(sessionId).get().addOnSuccessListener { snapshot ->
-            val name = snapshot.child("subjectName").value as? String ?: ""
-            val dept = snapshot.child("department").value as? String ?: ""
-            val details = snapshot.child("details").value as? String ?: ""
-            val sem = details.split(" - ").firstOrNull()?.filter { it.isDigit() } ?: ""
-            val sec = details.split(" - ").lastOrNull()?.trim() ?: ""
-            
-            val subjectId = "${name}_${dept}_${sem}_${sec}".replace(Regex("[.#$\\[\\]]"), "_")
-
-            GeofenceValidator.validate(
-                context = this,
-                subjectId = subjectId,
-                sessionId = sessionId,
-                studentUid = FirebaseAuth.getInstance().currentUser?.uid ?: "unknown",
-                rssi = rssi,
-                isPacketValid = true,
-                isTimestampValid = true,
-                onResult = { result ->
-                    runOnUiThread {
-                        when (result.verdict) {
-                            ClassroomBoundaryManager.Verdict.PRESENT -> markAttendance(sessionId, rssi, false)
-                            ClassroomBoundaryManager.Verdict.SUSPECT -> {
-                                markAttendance(sessionId, rssi, true)
-                                AlertDialog.Builder(this).setTitle("⚠️ Weak Signal").setMessage("Attendance flagged. Please move closer.").setPositiveButton("OK", null).show()
-                            }
-                            ClassroomBoundaryManager.Verdict.REJECTED -> {
-                                tvStatus.text = "❌ Outside Classroom"
-                                attendanceAttempted = false
-                            }
-                        }
-                    }
-                },
-                onNoBoundary = { runOnUiThread { markAttendance(sessionId, rssi, false) } },
-                onLocationError = { runOnUiThread { markAttendance(sessionId, rssi, false) } }
-            )
-        }.addOnFailureListener {
-            tvStatus.text = "Verification failed."
+        firestore.collection("attendance_sessions").document(sessionId).get().addOnSuccessListener { snapshot ->
+            val subId = snapshot.getString("subjectId") ?: ""
+            markAttendance(sessionId, subId, instId, rssi)
+        }.addOnFailureListener { e ->
+            Log.e("AttendanceFlow", "Failed to resolve session", e)
+            tvStatus.text = "❌ Validation failed."
             attendanceAttempted = false
         }
     }
 
-    private fun markAttendance(sessionId: String, rssi: Int, isSuspect: Boolean) {
-        val prefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-        val usn = prefs.getString("usn", "") ?: return
-        val name = prefs.getString("name", "Unknown")
-        
-        val data = mapOf(
-            "name" to "$name ($usn)", 
-            "rssi" to rssi, 
-            "zone" to (if (rssi > -60) "Strong" else "Normal"), 
-            "isSuspect" to isSuspect,
-            "timestamp" to ServerValue.TIMESTAMP
+    private fun markAttendance(sessionId: String, subjectId: String, instId: String, rssi: Int) {
+        val uid = auth.currentUser?.uid ?: return
+        val prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
+        val name = prefs.getString("name", "Unknown") ?: "Unknown"
+        val usn = prefs.getString("usn", "---") ?: "---"
+
+        Log.d("AttendanceFlow", "Attendance write started for session: $sessionId")
+        val record = mapOf(
+            "sessionId" to sessionId,
+            "subjectId" to subjectId,
+            "institutionId" to instId,
+            "studentId" to uid,
+            "studentName" to name,
+            "studentUsn" to usn,
+            "status" to "present",
+            "timestamp" to com.google.firebase.Timestamp.now(),
+            "rssi" to rssi,
+            "gpsValidated" to false 
         )
-        
-        sessionsRef.child(sessionId).child("students").child(usn).setValue(data)
-        rootRef.child("attendance_by_student").child(usn).child(sessionId).setValue(true)
-        
-        tvStatus.text = "✅ Attendance Marked"
-        ivStatusIcon.setImageResource(android.R.drawable.checkbox_on_background)
-        ivStatusIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_success)
-        btnMarkAttendance.isEnabled = false
+        firestore.collection("attendance_records").add(record)
+            .addOnSuccessListener {
+                Log.d("AttendanceFlow", "Attendance write successful")
+                tvStatus.text = "✅ Attendance Marked"
+                ivStatusIcon.setImageResource(android.R.drawable.checkbox_on_background)
+                ivStatusIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_success)
+                btnMarkAttendance.isEnabled = false
+            }
+            .addOnFailureListener { e ->
+                Log.e("AttendanceFlow", "Attendance write failed", e)
+                tvStatus.text = "❌ Failed to mark attendance."
+                attendanceAttempted = false
+            }
     }
 
     private fun confirmLogout() {
         AlertDialog.Builder(this).setTitle("Logout").setMessage("Logout from SecureAttend?").setPositiveButton("Logout") { _, _ -> 
+            auth.signOut()
             getSharedPreferences("UserPrefs", Context.MODE_PRIVATE).edit().clear().apply()
-            startActivity(Intent(this, MainActivity::class.java))
+            startActivity(Intent(this, StudentLoginActivity::class.java))
             finish() 
         }.setNegativeButton("Cancel", null).show()
     }
 
-    override fun onDestroy() {
-        stopBLEScan()
-        super.onDestroy()
-    }
+    override fun onDestroy() { stopBLEScan(); super.onDestroy() }
 }

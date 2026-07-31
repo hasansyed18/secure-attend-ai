@@ -28,6 +28,17 @@
         android:hint="Section (A/B/C)"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"/>
+        android:layout_marginTop="8dp"
+        android:inputType="textCapCharacters"
+        android:maxLength="1"/>
+
+    <EditText
+        android:id="@+id/etBatch"
+        android:hint="Batch (e.g. 2024)"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:inputType="number"
+        android:maxLength="4"/>
 
 </LinearLayout>

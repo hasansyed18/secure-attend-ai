@@ -37,9 +37,10 @@ class BleAdvertisingService : Service() {
         val dept = intent.getStringExtra("DEPT") ?: "XX"
         val sem = intent.getStringExtra("SEM") ?: "0"
         val sec = intent.getStringExtra("SECTION") ?: "X"
+        val batch = intent.getStringExtra("BATCH") ?: "0000"
 
-        // Compact Protocol: Dept|Sem|Sec|SessionID
-        val packet = "$dept|$sem|$sec|$sessionId"
+        // Compact Protocol: Dept|Sem|Sec|Batch|SessionID
+        val packet = "$dept|$sem|$sec|$batch|$sessionId"
         
         startAdvertising(packet)
         return START_STICKY

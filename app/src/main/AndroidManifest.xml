@@ -56,6 +56,11 @@
             android:theme="@style/Theme.AutoAttendance" />
 
         <activity
+            android:name=".HomeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AutoAttendance" />
+
+        <activity
             android:name=".StudentActivity"
             android:exported="false"
             android:theme="@style/Theme.AutoAttendance" />
@@ -74,6 +79,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".StudentEditProfileActivity"
+            android:exported="false"
+            android:label="Edit Profile" />
+
+        <activity
             android:name=".AttendanceHistoryActivity"
             android:exported="false"
             android:label="Attendance History" />
@@ -83,10 +93,7 @@
             android:exported="false"
             android:label="Class Analytics" />
 
-        <activity
-            android:name=".geofence.BoundarySetupActivity"
-            android:label="Setup Classroom Boundary"
-            android:screenOrientation="portrait" />
+
 
         <activity android:name=".LecturerLoginActivity" />
         <activity android:name=".LecturerRegisterActivity" />

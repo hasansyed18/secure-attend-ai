@@ -1,14 +1,14 @@
 package com.example.autoattendance
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -29,45 +29,76 @@ class AttendanceHistoryActivity : AppCompatActivity() {
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, historyList)
         lvHistory.adapter = adapter
 
-        val userPrefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
-        val usn = userPrefs.getString("usn", "") ?: ""
-
-        if (usn.isNotEmpty()) {
-            fetchHistory(usn)
-        }
+        fetchHistoryFirestore()
     }
 
-    private fun fetchHistory(usn: String) {
-        val database = FirebaseDatabase.getInstance().reference
-        val studentHistoryRef = database.child("attendance_by_student").child(usn)
-        val sessionsRef = database.child("sessions")
+    private fun fetchHistoryFirestore() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
+        val instId = prefs.getString("institutionId", "") ?: ""
+        val dept = prefs.getString("department", "") ?: ""
+        val sem = prefs.getString("semester", "") ?: ""
+        val sec = prefs.getString("section", "") ?: ""
 
-        studentHistoryRef.addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                historyList.clear()
-                val sessionIds = snapshot.children.mapNotNull { it.key }
-                tvStats.text = "Total Classes Attended: ${sessionIds.size}"
+        val db = FirebaseFirestore.getInstance()
 
-                for (sessionId in sessionIds) {
-                    sessionsRef.child(sessionId).addListenerForSingleValueEvent(object : ValueEventListener {
-                        override fun onDataChange(sessionSnapshot: DataSnapshot) {
-                            val subject = sessionSnapshot.child("subjectName").getValue(String::class.java) ?: "Unknown"
-                            val timestamp = sessionSnapshot.child("startTime").getValue(Long::class.java) ?: 0L
+        // 1. Fetch all sessions for this specific group
+        db.collection("attendance_sessions")
+            .whereEqualTo("institutionId", instId)
+            .whereEqualTo("department", dept)
+            .whereEqualTo("semester", sem)
+            .whereEqualTo("section", sec)
+            .get()
+            .addOnSuccessListener { sessionSnap ->
+                val allSessions = sessionSnap.documents
+                
+                // 2. Fetch student's attendance records
+                db.collection("attendance_records")
+                    .whereEqualTo("studentId", uid)
+                    .get()
+                    .addOnSuccessListener { recordSnap ->
+                        val attendedSessionIds = recordSnap.documents.mapNotNull { it.getString("sessionId") }.toSet()
+                        
+                        // 3. Aggregate subject-wise
+                        val statsMap = mutableMapOf<String, SubjectStats>()
+                        
+                        allSessions.forEach { sDoc ->
+                            val subName = sDoc.getString("subjectName") ?: "Unknown Subject"
+                            val isPresent = attendedSessionIds.contains(sDoc.id)
                             
-                            val date = if (timestamp > 0) {
-                                SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(timestamp))
-                            } else "N/A"
-
-                            historyList.add("$subject\nDate: $date")
-                            historyList.sortDescending() // Most recent first
-                            adapter.notifyDataSetChanged()
+                            val stats = statsMap.getOrPut(subName) { SubjectStats(subName) }
+                            stats.total++
+                            if (isPresent) stats.present++
                         }
-                        override fun onCancelled(error: DatabaseError) {}
-                    })
-                }
-            }
 
-            override fun onCancelled(error: DatabaseError) {}
-        })
+                        historyList.clear()
+                        var totalPresentTotal = 0
+                        var totalClassesTotal = 0
+
+                        statsMap.values.sortedBy { it.name }.forEach { stats ->
+                            val percent = if (stats.total > 0) (stats.present.toFloat() / stats.total.toFloat() * 100).toInt() else 0
+                            historyList.add("${stats.name}\nAttendance: $percent% (${stats.present}/${stats.total} Classes)")
+                            
+                            totalPresentTotal += stats.present
+                            totalClassesTotal += stats.total
+                        }
+
+                        if (historyList.isEmpty()) {
+                            historyList.add("No attendance data found for your section.")
+                        }
+                        
+                        tvStats.text = "Overall Attendance: $totalPresentTotal/$totalClassesTotal Classes"
+                        adapter.notifyDataSetChanged()
+                    }
+            }
+            .addOnFailureListener { e ->
+                Log.e("HistoryActivity", "Error fetching history", e)
+                Toast.makeText(this, "Error loading history", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private class SubjectStats(val name: String) {
+        var present: Int = 0
+        var total: Int = 0
     }
 }

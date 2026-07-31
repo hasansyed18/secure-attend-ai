@@ -2,6 +2,7 @@ package com.example.autoattendance
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 
@@ -18,20 +19,28 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 🔐 Role-based auto routing
+        // 🔐 Role-based auto routing (only if actually logged in)
         val userPrefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
         val role = userPrefs.getString("role", null)
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
 
-        if (role == "student") {
-            startActivity(Intent(this, StudentActivity::class.java))
-            finish()
-            return
-        }
+        if (auth.currentUser != null && role != null) {
+            Log.d("Routing", "MainActivity: User logged in, Role: $role")
+            if (role == "student") {
+                Log.d("Routing", "MainActivity: Routing to StudentActivity")
+                startActivity(Intent(this, StudentActivity::class.java))
+                finish()
+                return
+            }
 
-        if (role == "lecturer") {
-            startActivity(Intent(this, LecturerActivity::class.java))
-            finish()
-            return
+            if (role == "lecturer") {
+                Log.d("Routing", "MainActivity: Routing to LecturerActivity")
+                startActivity(Intent(this, LecturerActivity::class.java))
+                finish()
+                return
+            }
+        } else {
+            Log.d("Routing", "MainActivity: No user logged in or role missing. Auth: ${auth.currentUser?.uid}, Role: $role")
         }
 
         setContentView(R.layout.activity_main)
@@ -41,7 +50,7 @@ class MainActivity : AppCompatActivity() {
         val btnStudent: View = findViewById(R.id.btnStudent)
 
         btnLecturer.setOnClickListener {
-            startActivity(Intent(this, LecturerActivity::class.java))
+            startActivity(Intent(this, LecturerLoginActivity::class.java))
         }
 
         btnStudent.setOnClickListener {

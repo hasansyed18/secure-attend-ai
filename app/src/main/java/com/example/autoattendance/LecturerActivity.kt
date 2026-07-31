@@ -2,7 +2,6 @@ package com.example.autoattendance
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.bluetooth.BluetoothManager
@@ -28,13 +27,22 @@ import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import com.example.autoattendance.Subject
-import com.example.autoattendance.geofence.BoundarySetupActivity
+import com.example.autoattendance.models.StudentProfile
+import com.example.autoattendance.ui.Screen
+import com.example.autoattendance.ui.components.AppDrawer
+import com.example.autoattendance.ui.theme.AutoAttendanceTheme
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -43,13 +51,10 @@ import java.util.*
 class LecturerActivity : AppCompatActivity() {
 
     private companion object {
-        const val TAG = "LecturerActivity"
         const val PREFS_NAME = "LecturerSession"
         const val KEY_SESSION_ID = "active_session_id"
+        const val KEY_SUBJECT_ID = "active_subject_id"
         const val KEY_SUBJECT_NAME = "active_subject_name"
-        const val KEY_DEPT = "active_dept"
-        const val KEY_SEM = "active_sem"
-        const val KEY_SEC = "active_sec"
     }
 
     private lateinit var tvSystemStatus: TextView
@@ -61,24 +66,28 @@ class LecturerActivity : AppCompatActivity() {
     private lateinit var tvActiveSessionDetails: TextView
     private lateinit var tvLiveIndicator: TextView
     
+    private lateinit var tvWelcome: TextView
     private lateinit var lvStudentList: ListView
     private lateinit var btnStartClass: Button
     private lateinit var btnStopClass: Button
     private lateinit var btnAddSubject: Button
     private lateinit var btnExportCsv: Button
-    private lateinit var btnViewAnalytics: Button
-    private lateinit var btnSetupBoundary: Button
+    private lateinit var btnMenu: ImageView
+    private lateinit var cardManualAttendance: View
+    private lateinit var etSearchUsn: EditText
+    private lateinit var btnMarkManual: Button
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var drawerComposeView: ComposeView
 
     private lateinit var customAdapter: StudentListAdapter
     private val detectionList = mutableListOf<StudentDetection>()
 
     private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
-    private val database: FirebaseDatabase by lazy { FirebaseDatabase.getInstance() }
-    private val sessionsRef = database.getReference("sessions")
-    private val subjectsRef = database.getReference("subjects")
-
+    private val firestore: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    
+    private var institutionId: String? = null
     private var currentSessionId: String? = null
-    private var sessionListener: ValueEventListener? = null
+    private var sessionListener: ListenerRegistration? = null
 
     data class StudentDetection(
         val usn: String,
@@ -97,19 +106,81 @@ class LecturerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d("Routing", "LecturerActivity: onCreate started")
         if (auth.currentUser == null) {
+            Log.d("Routing", "LecturerActivity: No user logged in, routing to LecturerLoginActivity")
             startActivity(Intent(this, LecturerLoginActivity::class.java))
             finish()
             return
         }
         setContentView(R.layout.activity_lecturer)
+        
+        val userPrefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
+        institutionId = userPrefs.getString("institutionId", null)
+        Log.d("Routing", "LecturerActivity: institutionId: $institutionId")
+        
         initViews()
+        refreshProfileUI(userPrefs)
+        setupDrawer(userPrefs)
         restoreSession()
         monitorConnectivity()
     }
 
+    private fun refreshProfileUI(prefs: SharedPreferences) {
+        val name = prefs.getString("name", "Lecturer") ?: "Lecturer"
+        tvWelcome.text = "Welcome back, $name"
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshProfileUI(getSharedPreferences("UserPrefs", MODE_PRIVATE))
+    }
+
+    private fun setupDrawer(prefs: SharedPreferences) {
+        val name = prefs.getString("name", "Lecturer") ?: "Lecturer"
+        val email = prefs.getString("email", "") ?: ""
+        val role = prefs.getString("role", "lecturer") ?: "lecturer"
+
+        drawerComposeView.setContent {
+            AutoAttendanceTheme {
+                AppDrawer(
+                    currentRoute = Screen.Dashboard.route,
+                    onNavigate = { screen ->
+                        drawerLayout.closeDrawer(GravityCompat.START)
+                        handleNavigation(screen)
+                    },
+                    userName = name,
+                    userEmail = email,
+                    userRole = role
+                )
+            }
+        }
+    }
+
+    private fun handleNavigation(screen: Screen) {
+        when (screen) {
+            Screen.Dashboard -> { /* Already here */ }
+            Screen.Logout -> confirmLogout()
+            else -> {
+                val intent = Intent(this, HomeActivity::class.java).apply {
+                    putExtra("TARGET_SCREEN", screen.route)
+                }
+                startActivity(intent)
+            }
+        }
+    }
+
+    private fun confirmLogout() {
+        AlertDialog.Builder(this).setTitle("Logout").setMessage("Logout from SecureAttend?").setPositiveButton("Logout") { _, _ -> 
+            auth.signOut()
+            getSharedPreferences("UserPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+            startActivity(Intent(this, LecturerLoginActivity::class.java))
+            finish() 
+        }.setNegativeButton("Cancel", null).show()
+    }
+
     private fun monitorConnectivity() {
-        database.getReference(".info/connected").addValueEventListener(object : ValueEventListener {
+        FirebaseDatabase.getInstance().getReference(".info/connected").addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 updateUiActive(currentSessionId != null)
             }
@@ -118,7 +189,7 @@ class LecturerActivity : AppCompatActivity() {
     }
 
     private fun isOnline(): Boolean {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         val net = cm.activeNetwork ?: return false
         val cap = cm.getNetworkCapabilities(net) ?: return false
         return cap.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -129,10 +200,16 @@ class LecturerActivity : AppCompatActivity() {
         tvPresentCountLarge = findViewById(R.id.tvPresentCountLarge); tvAttendanceRate = findViewById(R.id.tvAttendanceRate)
         tvSuspiciousCount = findViewById(R.id.tvSuspiciousCount); tvActiveSubjectName = findViewById(R.id.tvActiveSubjectName)
         tvActiveSessionDetails = findViewById(R.id.tvActiveSessionDetails); tvLiveIndicator = findViewById(R.id.tvLiveIndicator)
+        tvWelcome = findViewById(R.id.tvWelcome)
         lvStudentList = findViewById(R.id.lvStudentList); btnStartClass = findViewById(R.id.btnStartClass)
         btnStopClass = findViewById(R.id.btnStopClass); btnAddSubject = findViewById(R.id.btnAddSubject)
-        btnExportCsv = findViewById(R.id.btnExportCsv); btnViewAnalytics = findViewById(R.id.btnViewAnalytics)
-        btnSetupBoundary = findViewById(R.id.btnSetupBoundary)
+        btnExportCsv = findViewById(R.id.btnExportCsv)
+        btnMenu = findViewById(R.id.btnMenu)
+        cardManualAttendance = findViewById(R.id.cardManualAttendance)
+        etSearchUsn = findViewById(R.id.etSearchUsn)
+        btnMarkManual = findViewById(R.id.btnMarkManual)
+        drawerLayout = findViewById(R.id.drawerLayout)
+        drawerComposeView = findViewById(R.id.drawerComposeView)
         
         customAdapter = StudentListAdapter(this, detectionList); lvStudentList.adapter = customAdapter
         
@@ -140,10 +217,10 @@ class LecturerActivity : AppCompatActivity() {
         btnStopClass.setOnClickListener { stopClassSession() }
         btnAddSubject.setOnClickListener { openAddSubjectDialog() }
         btnExportCsv.setOnClickListener { exportAttendanceToCsv() }
-        btnViewAnalytics.setOnClickListener { showAnalyticsDialog() }
-        btnSetupBoundary.setOnClickListener { showSubjectForBoundary() }
+        btnMenu.setOnClickListener { drawerLayout.openDrawer(GravityCompat.START) }
+        btnMarkManual.setOnClickListener { markAttendanceManually() }
+        drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
 
-        // Animation: Fade in the dashboard
         findViewById<View>(android.R.id.content).alpha = 0f
         findViewById<View>(android.R.id.content).animate().alpha(1f).setDuration(500).start()
     }
@@ -151,7 +228,10 @@ class LecturerActivity : AppCompatActivity() {
     private fun startClassProcess() {
         val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            required.addAll(listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.POST_NOTIFICATIONS))
+            required.addAll(listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT))
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            required.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         val missing = required.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) checkBluetoothAndStart() else requestPermissionLauncher.launch(missing.toTypedArray())
@@ -166,84 +246,89 @@ class LecturerActivity : AppCompatActivity() {
         showSubjectSelectionDialog()
     }
 
-    private fun activateClassSession(subject: Subject) {
+    private fun activateClassSession(subject: Subject, subjectId: String) {
+        val instId = institutionId ?: return
         val sessionId = "S${System.currentTimeMillis()}"
         currentSessionId = sessionId
         
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
             .putString(KEY_SESSION_ID, sessionId)
+            .putString(KEY_SUBJECT_ID, subjectId)
             .putString(KEY_SUBJECT_NAME, subject.subjectName)
-            .putString(KEY_DEPT, subject.department)
-            .putString(KEY_SEM, subject.semester)
-            .putString(KEY_SEC, subject.section)
+            .putString("active_batch", subject.batch)
             .apply()
         
         tvActiveSubjectName.text = subject.subjectName
-        tvActiveSessionDetails.text = "${subject.department} • Sem ${subject.semester} • Sec ${subject.section}"
+        tvActiveSessionDetails.text = "${subject.department} • Sem ${subject.semester} • Sec ${subject.section} • ${subject.batch}"
 
         val sessionData = hashMapOf<String, Any>(
-            "isActive" to true, 
-            "lecturerUid" to (auth.currentUser?.uid ?: ""), 
-            "subjectName" to subject.subjectName, 
-            "department" to subject.department, 
-            "startTime" to ServerValue.TIMESTAMP, 
-            "details" to "${subject.semester} - ${subject.section}"
+            "sessionId" to sessionId,
+            "institutionId" to instId,
+            "subjectId" to subjectId,
+            "subjectName" to subject.subjectName,
+            "department" to subject.department,
+            "semester" to subject.semester,
+            "section" to subject.section,
+            "batch" to subject.batch,
+            "lecturerId" to (auth.currentUser?.uid ?: ""), 
+            "startTime" to com.google.firebase.Timestamp.now(), 
+            "status" to "active",
+            "details" to "${subject.semester} - ${subject.section} - ${subject.batch}"
         )
-        sessionsRef.child(sessionId).setValue(sessionData)
-        database.reference.child("current_session").setValue(sessionId)
 
-        // START ADVERTISING
+        firestore.collection("attendance_sessions").document(sessionId).set(sessionData)
+
         val deptCode = when(subject.department) { "CSE" -> "CS"; "AI" -> "AI"; "EEE" -> "EE"; "ECE" -> "EC"; "Mechanical" -> "ME"; "Civil" -> "CV"; else -> "XX" }
         val intent = Intent(this, BleAdvertisingService::class.java).apply { 
             putExtra("SESSION_ID", sessionId)
             putExtra("DEPT", deptCode)
             putExtra("SEM", subject.semester)
             putExtra("SECTION", subject.section)
+            putExtra("BATCH", subject.batch)
         }
         ContextCompat.startForegroundService(this, intent)
         
-        updateUiActive(true)
+        updateUiActive(isActive = true)
         listenForAttendance(sessionId)
     }
 
     private fun stopClassSession() {
         val sessionId = currentSessionId ?: return
         stopService(Intent(this, BleAdvertisingService::class.java))
-        sessionListener?.let { sessionsRef.child(sessionId).child("students").removeEventListener(it) }
+        sessionListener?.remove()
         sessionListener = null
-        sessionsRef.child(sessionId).child("isActive").setValue(false)
-        database.reference.child("current_session").removeValue()
+
+        firestore.collection("attendance_sessions").document(sessionId).update("status", "completed", "endTime", com.google.firebase.Timestamp.now())
+
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().clear().apply()
         currentSessionId = null; updateUiActive(false); btnExportCsv.visibility = View.VISIBLE
     }
 
     private fun listenForAttendance(sessionId: String) {
-        val studentsRef = sessionsRef.child(sessionId).child("students")
-        sessionListener?.let { studentsRef.removeEventListener(it) }
-        sessionListener = studentsRef.addValueEventListener(object : ValueEventListener {
-            @SuppressLint("SetTextI18n")
-            override fun onDataChange(snapshot: DataSnapshot) {
+        sessionListener = firestore.collection("attendance_records")
+            .whereEqualTo("sessionId", sessionId)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+                
                 detectionList.clear()
                 var suspectCount = 0
-                for (child in snapshot.children) {
-                    val fullName = child.child("name").getValue(String::class.java) ?: "Unknown"
-                    val rssi = child.child("rssi").getValue(Long::class.java)?.toInt() ?: 0
-                    val timestamp = child.child("timestamp").getValue(Long::class.java) ?: 0L
-                    val isSuspect = child.child("isSuspect").getValue(Boolean::class.java) == true
+                snapshot?.documents?.forEach { doc ->
+                    val studentUsn = doc.getString("studentUsn") ?: "---"
+                    val studentName = doc.getString("studentName") ?: "Unknown"
+                    val rssi = doc.getLong("rssi")?.toInt() ?: 0
+                    val timestamp = doc.getTimestamp("timestamp")?.toDate()?.time ?: 0L
+                    val status = doc.getString("status") ?: "present"
+                    val isSuspect = status == "suspect"
                     if (isSuspect) suspectCount++
-                    val namePart = fullName.substringBefore(" (")
-                    val usnPart = fullName.substringAfter("(", "").replace(")", "")
-                    detectionList.add(StudentDetection(usnPart, namePart, rssi, timestamp, isSuspect))
+                    
+                    detectionList.add(StudentDetection(studentUsn, studentName, rssi, timestamp, isSuspect))
                 }
                 detectionList.sortByDescending { it.timestamp }
                 customAdapter.notifyDataSetChanged()
-                tvPresentCountLarge.text = "${detectionList.size}/60"
+                tvPresentCountLarge.text = detectionList.size.toString()
                 tvSuspiciousCount.text = suspectCount.toString()
-                val rate = if (60 > 0) (detectionList.size.toFloat() / 60f * 100).toInt() else 0
-                tvAttendanceRate.text = "$rate% attendance"
+                tvAttendanceRate.text = "${detectionList.size} Present"
             }
-            override fun onCancelled(error: DatabaseError) {}
-        })
     }
 
     private fun updateUiActive(isActive: Boolean) {
@@ -252,26 +337,94 @@ class LecturerActivity : AppCompatActivity() {
             tvSystemStatus.text = if (online) "System Active" else "System Active (Offline)"
             statusDot.backgroundTintList = ContextCompat.getColorStateList(this, if(online) R.color.status_success else R.color.status_warning)
             btnStartClass.visibility = View.GONE; btnStopClass.visibility = View.VISIBLE; tvLiveIndicator.visibility = View.VISIBLE
+            cardManualAttendance.visibility = View.VISIBLE
         } else {
             tvSystemStatus.text = "System Inactive"; statusDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.text_secondary)
             btnStartClass.visibility = View.VISIBLE; btnStopClass.visibility = View.GONE; tvLiveIndicator.visibility = View.GONE
+            cardManualAttendance.visibility = View.GONE
         }
+    }
+
+    private fun markAttendanceManually() {
+        val usn = etSearchUsn.text.toString().trim().uppercase()
+        val sessionId = currentSessionId ?: return
+        val instId = institutionId ?: return
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val subjectId = prefs.getString(KEY_SUBJECT_ID, "") ?: ""
+
+        if (usn.isEmpty()) {
+            Toast.makeText(this, "Enter student USN", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        btnMarkManual.isEnabled = false
+        firestore.collection("users")
+            .whereEqualTo("role", "student")
+            .whereEqualTo("usn", usn)
+            .whereEqualTo("institutionId", instId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.isEmpty) {
+                    Toast.makeText(this, "Student not found in this institution", Toast.LENGTH_LONG).show()
+                    btnMarkManual.isEnabled = true
+                    return@addOnSuccessListener
+                }
+
+                val doc = snapshot.documents[0]
+                val name = doc.getString("name") ?: "Unknown"
+                val uid = doc.id
+
+                AlertDialog.Builder(this)
+                    .setTitle("Mark Manual Attendance")
+                    .setMessage("Mark attendance for $name ($usn)?")
+                    .setPositiveButton("Confirm") { _, _ ->
+                        val record = mapOf(
+                            "sessionId" to sessionId,
+                            "subjectId" to subjectId,
+                            "institutionId" to instId,
+                            "studentId" to uid,
+                            "studentName" to name,
+                            "studentUsn" to usn,
+                            "status" to "present",
+                            "timestamp" to com.google.firebase.Timestamp.now(),
+                            "rssi" to 0,
+                            "gpsValidated" to false,
+                            "manualMark" to true
+                        )
+                        firestore.collection("attendance_records").add(record)
+                            .addOnSuccessListener {
+                                Toast.makeText(this, "Manual attendance marked!", Toast.LENGTH_SHORT).show()
+                                etSearchUsn.setText("")
+                                btnMarkManual.isEnabled = true
+                            }
+                            .addOnFailureListener { e ->
+                                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                btnMarkManual.isEnabled = true
+                            }
+                    }
+                    .setNegativeButton("Cancel") { _, _ -> btnMarkManual.isEnabled = true }
+                    .show()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "Search failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                btnMarkManual.isEnabled = true
+            }
     }
 
     private fun restoreSession() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val savedId = prefs.getString(KEY_SESSION_ID, null) ?: return
         currentSessionId = savedId
-        val subName = prefs.getString(KEY_SUBJECT_NAME, "Active Session")
+        val subName = prefs.getString(KEY_SUBJECT_NAME, "Active Session") ?: "Active Session"
         tvActiveSubjectName.text = subName
         updateUiActive(true); listenForAttendance(savedId)
     }
 
     private fun exportAttendanceToCsv() {
         if (detectionList.isEmpty()) return
-        val csvContent = StringBuilder("Student Name,USN,Timestamp,RSSI\n")
+        val csvContent = StringBuilder("Student ID,Timestamp,RSSI,Status\n")
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        for (student in detectionList) { csvContent.append("\"${student.studentName}\",${student.usn},${dateFormat.format(Date(student.timestamp))},${student.rssi}\n") }
+        for (student in detectionList) { csvContent.append("${student.usn},${dateFormat.format(Date(student.timestamp))},${student.rssi},${if(student.isSuspect) "Suspect" else "Present"}\n") }
         try {
             val file = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "SecureAttend_Report_${System.currentTimeMillis()}.csv")
             FileOutputStream(file).apply { write(csvContent.toString().toByteArray()); close() }
@@ -279,71 +432,38 @@ class LecturerActivity : AppCompatActivity() {
         } catch (e: Exception) {}
     }
 
-    private fun showAnalyticsDialog() {
-        val uid = auth.currentUser?.uid ?: return
-        subjectsRef.child(uid).addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val subjects = snapshot.children.mapNotNull { it.getValue(Subject::class.java) }
-                val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
-                AlertDialog.Builder(this@LecturerActivity).setTitle("Select for Analytics").setItems(displayNames) { _, index ->
-                    val s = subjects[index]
-                    startActivity(Intent(this@LecturerActivity, LecturerAnalyticsActivity::class.java).apply { putExtra("SUBJECT_NAME", s.subjectName); putExtra("DEPT", s.department); putExtra("SEM", s.semester); putExtra("SECTION", s.section) })
-                }.show()
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
-    }
+
 
     private fun showSubjectSelectionDialog() {
-        val uid = auth.currentUser?.uid ?: return
-        subjectsRef.child(uid).addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val subjects = mutableListOf<Subject>()
-                val subjectKeys = mutableListOf<String>()
-                snapshot.children.forEach { 
-                    it.getValue(Subject::class.java)?.let { sub -> subjects.add(sub); subjectKeys.add(it.key ?: "") }
+        val instId = institutionId ?: return
+        firestore.collection("subjects").whereEqualTo("institutionId", instId).get().addOnSuccessListener { snapshot ->
+            val subjects = mutableListOf<Subject>()
+            val ids = mutableListOf<String>()
+            snapshot.documents.forEach { doc ->
+                doc.toObject(Subject::class.java)?.let { sub ->
+                    subjects.add(sub)
+                    ids.add(doc.id)
                 }
-                if (subjects.isEmpty()) { Toast.makeText(this@LecturerActivity, "Add a subject first", Toast.LENGTH_SHORT).show(); return }
-                val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
-                AlertDialog.Builder(this@LecturerActivity).setTitle("Select Subject").setItems(displayNames) { _, index -> showSubjectOptions(subjects[index], subjectKeys[index]) }.show()
             }
-            override fun onCancelled(error: DatabaseError) {}
-        })
+            if (subjects.isEmpty()) { Toast.makeText(this@LecturerActivity, "Add a subject first", Toast.LENGTH_SHORT).show(); return@addOnSuccessListener }
+            val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
+            AlertDialog.Builder(this@LecturerActivity).setTitle("Select Subject").setItems(displayNames) { _, index -> showSubjectOptions(subjects[index], ids[index]) }.show()
+        }
     }
 
-    private fun showSubjectOptions(subject: Subject, key: String) {
+    private fun showSubjectOptions(subject: Subject, id: String) {
         AlertDialog.Builder(this).setTitle(subject.subjectName).setItems(arrayOf("Start Class Session", "Delete Subject")) { _, which ->
-            if (which == 0) activateClassSession(subject) else deleteSubject(key)
+            if (which == 0) activateClassSession(subject, id) else deleteSubject(id)
         }.show()
     }
 
-    private fun deleteSubject(key: String) {
-        val uid = auth.currentUser?.uid ?: return
+    private fun deleteSubject(id: String) {
         AlertDialog.Builder(this).setTitle("Delete Subject?").setMessage("Permanently remove this subject?").setPositiveButton("Delete") { _, _ ->
-            subjectsRef.child(uid).child(key).removeValue().addOnSuccessListener { Toast.makeText(this, "Subject Deleted", Toast.LENGTH_SHORT).show() }
+            firestore.collection("subjects").document(id).delete().addOnSuccessListener { Toast.makeText(this, "Subject Deleted", Toast.LENGTH_SHORT).show() }
         }.setNegativeButton("Cancel", null).show()
     }
 
-    private fun showSubjectForBoundary() {
-        val uid = auth.currentUser?.uid ?: return
-        subjectsRef.child(uid).addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val subjects = mutableListOf<Subject>()
-                val subjectKeys = mutableListOf<String>()
-                snapshot.children.forEach { it.getValue(Subject::class.java)?.let { sub -> subjects.add(sub); subjectKeys.add(it.key ?: "") } }
-                if (subjects.isEmpty()) return
-                val displayNames = subjects.map { "${it.subjectName} (${it.section})" }.toTypedArray()
-                AlertDialog.Builder(this@LecturerActivity).setTitle("Select for Boundary").setItems(displayNames) { _, index ->
-                    val intent = Intent(this@LecturerActivity, BoundarySetupActivity::class.java).apply {
-                        putExtra(BoundarySetupActivity.EXTRA_SUBJECT_ID, subjectKeys[index])
-                        putExtra(BoundarySetupActivity.EXTRA_CLASSROOM_NAME, subjects[index].subjectName)
-                    }
-                    startActivity(intent)
-                }.show()
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
-    }
+
 
     private fun openAddSubjectDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_subject, null)
@@ -351,15 +471,28 @@ class LecturerActivity : AppCompatActivity() {
         val spinnerDept = dialogView.findViewById<Spinner>(R.id.spinnerDepartment).apply { adapter = ArrayAdapter(this@LecturerActivity, android.R.layout.simple_spinner_dropdown_item, arrayOf("CSE","AI","EEE","ECE","Mechanical","Civil")) }
         val spinnerSem = dialogView.findViewById<Spinner>(R.id.spinnerSemester).apply { adapter = ArrayAdapter(this@LecturerActivity, android.R.layout.simple_spinner_dropdown_item, arrayOf("SEM-1","SEM-2","SEM-3","SEM-4","SEM-5","SEM-6","SEM-7","SEM-8")) }
         val etSection = dialogView.findViewById<EditText>(R.id.etSection)
+        val etBatch = dialogView.findViewById<EditText>(R.id.etBatch)
         AlertDialog.Builder(this).setTitle("Add Subject").setView(dialogView).setPositiveButton("Save") { _, _ ->
-            val uid = auth.currentUser?.uid ?: return@setPositiveButton
+            val instId = institutionId ?: return@setPositiveButton
             val name = etSubject.text.toString().trim()
             val dept = spinnerDept.selectedItem.toString()
             val sem = spinnerSem.selectedItem.toString().replace("SEM-", "")
             val section = etSection.text.toString().trim().uppercase()
-            if (name.isEmpty() || section.isEmpty()) return@setPositiveButton
-            val uniqueKey = "${name}_${dept}_${sem}_${section}".replace(Regex("[.#$\\[\\]]"), "_")
-            subjectsRef.child(uid).child(uniqueKey).setValue(Subject(name, dept, sem, section)).addOnSuccessListener { Toast.makeText(this, "Added Successfully", Toast.LENGTH_SHORT).show() }
+            val batch = etBatch.text.toString().trim()
+            if (name.isEmpty() || section.isEmpty() || batch.isEmpty()) return@setPositiveButton
+            val uniqueKey = "${instId}_${name}_${dept}_${sem}_${section}_${batch}".replace(Regex("[.#$\\[\\]]"), "_")
+            
+            val subjectData = mapOf(
+                "institutionId" to instId,
+                "subjectName" to name,
+                "department" to dept,
+                "semester" to sem,
+                "section" to section,
+                "batch" to batch,
+                "lecturerId" to (auth.currentUser?.uid ?: "")
+            )
+            
+            firestore.collection("subjects").document(uniqueKey).set(subjectData).addOnSuccessListener { Toast.makeText(this, "Added Successfully", Toast.LENGTH_SHORT).show() }
         }.setNegativeButton("Cancel", null).show()
     }
 
@@ -368,21 +501,13 @@ class LecturerActivity : AppCompatActivity() {
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.student_list_item, parent, false)
             val student = students[position]
-            view.findViewById<TextView>(R.id.tvStudentName).text = student.studentName; view.findViewById<TextView>(R.id.tvStudentUsn).text = student.usn; view.findViewById<TextView>(R.id.tvStudentInitials).text = student.studentName.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase()
+            view.findViewById<TextView>(R.id.tvStudentName).text = student.studentName; view.findViewById<TextView>(R.id.tvStudentUsn).text = student.usn; view.findViewById<TextView>(R.id.tvStudentInitials).text = student.studentName.firstOrNull()?.toString()?.uppercase() ?: "?"
             val badge = view.findViewById<TextView>(R.id.tvRssiBadge); badge.text = "${student.rssi} dBm"
             if (student.isSuspect) { badge.backgroundTintList = ContextCompat.getColorStateList(context, R.color.signal_weak); badge.setTextColor(Color.WHITE) } 
             else { badge.backgroundTintList = ContextCompat.getColorStateList(context, R.color.signal_strong); badge.setTextColor(Color.WHITE) }
-            
-            // Animation for list items
-            view.translationX = 100f
-            view.alpha = 0f
-            view.animate().translationX(0f).alpha(1f).setDuration(300).setStartDelay(position * 50L).start()
-            
             return view
         }
     }
 
-    override fun onDestroy() { 
-        super.onDestroy() 
-    }
+    override fun onDestroy() { super.onDestroy() }
 }
