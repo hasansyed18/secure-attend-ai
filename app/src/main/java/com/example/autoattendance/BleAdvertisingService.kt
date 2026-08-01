@@ -17,7 +17,6 @@ class BleAdvertisingService : Service() {
     private var bleAdvertiser: BluetoothLeAdvertiser? = null
     
     // ⚡ Industry standard 16-bit short UUID for "FEAF"
-    // This saves 14 bytes per packet, allowing us to fit all metadata
     private val SERVICE_UUID = ParcelUuid.fromString("0000FEAF-0000-1000-8000-00805F9B34FB")
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -34,13 +33,10 @@ class BleAdvertisingService : Service() {
 
         bleAdvertiser = adapter.bluetoothLeAdvertiser
         val sessionId = intent.getStringExtra("SESSION_ID") ?: run { stopSelf(); return START_NOT_STICKY }
-        val dept = intent.getStringExtra("DEPT") ?: "XX"
-        val sem = intent.getStringExtra("SEM") ?: "0"
-        val sec = intent.getStringExtra("SECTION") ?: "X"
-        val batch = intent.getStringExtra("BATCH") ?: "0000"
+        val token = intent.getStringExtra("TOKEN") ?: ""
 
-        // Compact Protocol: Dept|Sem|Sec|Batch|SessionID
-        val packet = "$dept|$sem|$sec|$batch|$sessionId"
+        // New Scalable Protocol: SessionID|Token
+        val packet = "$sessionId|$token"
         
         startAdvertising(packet)
         return START_STICKY
@@ -55,7 +51,6 @@ class BleAdvertisingService : Service() {
 
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
-            // By using addServiceData with a 16-bit UUID format, we fit everything in 31 bytes
             .addServiceData(SERVICE_UUID, packet.toByteArray())
             .build()
 
@@ -81,7 +76,7 @@ class BleAdvertisingService : Service() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Broadcasting Class Session")
             .setContentText("ID: $sid")
-            .setSmallIcon(R.drawable.ic_attendit_logo)
+            .setSmallIcon(R.drawable.ic_secure_attend_logo) // Using renamed logo
             .setOngoing(true)
             .build()
     }

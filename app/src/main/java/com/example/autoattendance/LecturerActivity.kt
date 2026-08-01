@@ -249,6 +249,7 @@ class LecturerActivity : AppCompatActivity() {
     private fun activateClassSession(subject: Subject, subjectId: String) {
         val instId = institutionId ?: return
         val sessionId = "S${System.currentTimeMillis()}"
+        val securityToken = UUID.randomUUID().toString().substring(0, 6).uppercase()
         currentSessionId = sessionId
         
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
@@ -261,8 +262,12 @@ class LecturerActivity : AppCompatActivity() {
         tvActiveSubjectName.text = subject.subjectName
         tvActiveSessionDetails.text = "${subject.department} • Sem ${subject.semester} • Sec ${subject.section} • ${subject.batch}"
 
+        val startTime = com.google.firebase.Timestamp.now()
+        val expiresAt = com.google.firebase.Timestamp(Date(startTime.toDate().time + 900000)) // 15 Minutes Expiry (Security Hardening)
+
         val sessionData = hashMapOf<String, Any>(
             "sessionId" to sessionId,
+            "securityToken" to securityToken,
             "institutionId" to instId,
             "subjectId" to subjectId,
             "subjectName" to subject.subjectName,
@@ -271,20 +276,17 @@ class LecturerActivity : AppCompatActivity() {
             "section" to subject.section,
             "batch" to subject.batch,
             "lecturerId" to (auth.currentUser?.uid ?: ""), 
-            "startTime" to com.google.firebase.Timestamp.now(), 
+            "startTime" to startTime,
+            "expiresAt" to expiresAt,
             "status" to "active",
             "details" to "${subject.semester} - ${subject.section} - ${subject.batch}"
         )
 
         firestore.collection("attendance_sessions").document(sessionId).set(sessionData)
 
-        val deptCode = when(subject.department) { "CSE" -> "CS"; "AI" -> "AI"; "EEE" -> "EE"; "ECE" -> "EC"; "Mechanical" -> "ME"; "Civil" -> "CV"; else -> "XX" }
         val intent = Intent(this, BleAdvertisingService::class.java).apply { 
             putExtra("SESSION_ID", sessionId)
-            putExtra("DEPT", deptCode)
-            putExtra("SEM", subject.semester)
-            putExtra("SECTION", subject.section)
-            putExtra("BATCH", subject.batch)
+            putExtra("TOKEN", securityToken)
         }
         ContextCompat.startForegroundService(this, intent)
         

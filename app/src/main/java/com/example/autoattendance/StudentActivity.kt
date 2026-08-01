@@ -227,37 +227,73 @@ class StudentActivity : AppCompatActivity() {
         if (attendanceAttempted) return
         
         val parts = packet.split("|")
-        if (parts.size < 5) return
+        if (parts.size < 2) return
         
-        val bDept = parts[0]; val bSem = parts[1]; val bSec = parts[2]; val bBatch = parts[3]; val sessionId = parts[4]
-        val prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
-        val sDept = prefs.getString("department", "") ?: ""
-        val sSem = prefs.getString("semester", "") ?: ""
-        val sSec = prefs.getString("section", "") ?: ""
-        val sBatch = prefs.getInt("batch", 0).toString()
+        val sessionId = parts[0]
+        val token = parts[1]
         
-        if (sDept.startsWith(bDept) && sSem == bSem && sSec.equals(bSec, ignoreCase = true) && sBatch == bBatch) {
-            if (rssi >= -85) {
-                Log.d("AttendanceFlow", "Class beacon detected: $sessionId (RSSI: $rssi)")
-                attendanceAttempted = true
-                stopBLEScan()
-                resolveSubjectAndMark(sessionId, rssi)
-            }
+        if (rssi >= -85) {
+            Log.d("AttendanceFlow", "Class beacon detected: $sessionId. Validating with Firestore...")
+            attendanceAttempted = true
+            stopBLEScan()
+            validateSessionAndMark(sessionId, token, rssi)
         }
     }
 
-    private fun resolveSubjectAndMark(sessionId: String, rssi: Int) {
+    private fun validateSessionAndMark(sessionId: String, token: String, rssi: Int) {
         val instId = institutionId ?: return
-        tvStatus.text = "Verifying class details..."
+        tvStatus.text = "Securing session connection..."
         
         firestore.collection("attendance_sessions").document(sessionId).get().addOnSuccessListener { snapshot ->
-            val subId = snapshot.getString("subjectId") ?: ""
-            markAttendance(sessionId, subId, instId, rssi)
+            if (!snapshot.exists()) {
+                Log.e("AttendanceFlow", "Session not found in Firestore")
+                resetMarking("Session invalid.")
+                return@addOnSuccessListener
+            }
+
+            val dbToken = snapshot.getString("securityToken") ?: ""
+            val status = snapshot.getString("status") ?: ""
+            val expiresAt = snapshot.getTimestamp("expiresAt")?.toDate()?.time ?: 0L
+            val currentTime = System.currentTimeMillis()
+
+            // 1. Security & Expiry Check
+            if (token != dbToken || status != "active" || currentTime > expiresAt) {
+                Log.e("AttendanceFlow", "Validation failed: Token match: ${token == dbToken}, Status: $status, Expired: ${currentTime > expiresAt}")
+                resetMarking(if (currentTime > expiresAt) "Session expired." else "Security mismatch.")
+                return@addOnSuccessListener
+            }
+
+            // 2. Enrollment Check (Multi-Institution Safety)
+            val prefs = getSharedPreferences("UserPrefs", MODE_PRIVATE)
+            val sDept = prefs.getString("department", "") ?: ""
+            val sSem = prefs.getString("semester", "") ?: ""
+            val sSec = prefs.getString("section", "") ?: ""
+            val sBatch = prefs.getInt("batch", 0).toString()
+
+            val bDept = snapshot.getString("department") ?: ""
+            val bSem = snapshot.getString("semester") ?: ""
+            val bSec = snapshot.getString("section") ?: ""
+            val bBatch = snapshot.getString("batch") ?: ""
+            val bInst = snapshot.getString("institutionId") ?: ""
+
+            if (instId == bInst && sDept == bDept && sSem == bSem && sSec == bSec && sBatch == bBatch) {
+                val subId = snapshot.getString("subjectId") ?: ""
+                markAttendance(sessionId, subId, instId, rssi)
+            } else {
+                Log.e("AttendanceFlow", "Enrollment mismatch. Student: $sDept $sSem $sSec $sBatch, Session: $bDept $bSem $bSec $bBatch")
+                resetMarking("Not enrolled in this class.")
+            }
+
         }.addOnFailureListener { e ->
-            Log.e("AttendanceFlow", "Failed to resolve session", e)
-            tvStatus.text = "❌ Validation failed."
-            attendanceAttempted = false
+            Log.e("AttendanceFlow", "Firestore lookup failed", e)
+            resetMarking("Validation error.")
         }
+    }
+
+    private fun resetMarking(message: String) {
+        tvStatus.text = "❌ $message"
+        attendanceAttempted = false
+        // Optionally restart scan after delay
     }
 
     private fun markAttendance(sessionId: String, subjectId: String, instId: String, rssi: Int) {
