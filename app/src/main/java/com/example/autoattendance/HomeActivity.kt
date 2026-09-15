@@ -25,6 +25,7 @@ import com.example.autoattendance.ui.components.AppDrawer
 import com.example.autoattendance.ui.screens.AttendanceHistoryScreen
 import com.example.autoattendance.ui.screens.LecturerAnalyticsScreen
 import com.example.autoattendance.ui.screens.ProfileScreen
+import com.example.autoattendance.ui.screens.HallOfFameScreen
 import com.example.autoattendance.ui.theme.AutoAttendanceTheme
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
@@ -143,7 +144,7 @@ class HomeActivity : ComponentActivity() {
                                 AttendanceHistoryScreen()
                             }
                         }
-                        composable(Screen.Achievements.route) { PlaceholderScreen("Achievements") }
+                        composable(Screen.HallOfFame.route) { HallOfFameScreen() }
                         composable(Screen.UpcomingClasses.route) { PlaceholderScreen("Upcoming Classes") }
                         composable(Screen.Notifications.route) { PlaceholderScreen("Notifications") }
                         composable(Screen.Settings.route) { PlaceholderScreen("Settings") }

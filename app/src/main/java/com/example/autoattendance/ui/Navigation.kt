@@ -8,7 +8,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Dashboard)
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
     object AttendanceHistory : Screen("history", "Attendance History", Icons.Default.History)
-    object Achievements : Screen("achievements", "Achievements", Icons.Default.EmojiEvents)
+    object HallOfFame : Screen("hall_of_fame", "Hall of Fame", Icons.Default.EmojiEvents)
     object UpcomingClasses : Screen("upcoming", "Upcoming Classes", Icons.Default.Event)
     object Notifications : Screen("notifications", "Notifications", Icons.Default.Notifications)
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
@@ -21,7 +21,7 @@ val AllScreens = listOf(
     Screen.Dashboard,
     Screen.Profile,
     Screen.AttendanceHistory,
-    Screen.Achievements,
+    Screen.HallOfFame,
     Screen.UpcomingClasses,
     Screen.Notifications,
     Screen.Settings,

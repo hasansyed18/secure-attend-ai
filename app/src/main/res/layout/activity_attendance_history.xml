@@ -19,7 +19,7 @@
         android:layout_height="wrap_content"
         android:text="Total Classes Attended: 0"
         android:textSize="16sp"
-        android:textColor="@color/success_green"
+        android:textColor="?attr/colorPrimary"
         android:layout_marginBottom="16dp"/>
 
     <ListView

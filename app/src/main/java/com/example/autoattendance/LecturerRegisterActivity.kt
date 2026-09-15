@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.example.autoattendance.models.LecturerProfile
+import com.example.autoattendance.ui.theme.AutoAttendanceTheme
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -32,11 +33,13 @@ class LecturerRegisterActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.autoattendance.ui.theme.ThemeConfig.load(this)
         setContentView(R.layout.activity_lecturer_register)
 
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
 
+        setupThemeToggle()
         initViews()
         setupDropdowns()
         fetchStates()
@@ -47,6 +50,15 @@ class LecturerRegisterActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.tvRequestInstitution).setOnClickListener {
             showRequestInstitutionDialog()
+        }
+    }
+
+    private fun setupThemeToggle() {
+        val toggleView = findViewById<androidx.compose.ui.platform.ComposeView>(R.id.themeToggleCompose)
+        toggleView.setContent {
+            AutoAttendanceTheme {
+                com.example.autoattendance.ui.components.ThemeToggle()
+            }
         }
     }
 
@@ -210,27 +222,28 @@ class LecturerRegisterActivity : AppCompatActivity() {
             Log.d("Registration", "registerLecturer: Writing to Firestore")
             firestore.collection("users").document(uid).set(profile)
                 .addOnSuccessListener {
-                    Log.d("Registration", "registerLecturer: Firestore Success")
-                    progressBar.visibility = View.GONE
-                    val userPrefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-                    userPrefs.edit()
-                        .putString("role", "lecturer")
-                        .putString("uid", uid)
-                        .putString("name", name)
-                        .putString("email", email)
-                        .putString("state", selectedStateId)
-                        .putString("city", selectedCityId)
-                        .putString("institutionId", selectedInstitutionId)
-                        .putString("institution", selectedInstitutionId)
-                        .apply()
+                    // 📧 Send Email Verification
+                    auth.currentUser?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
+                        progressBar.visibility = android.view.View.GONE
+                        if (verifyTask.isSuccessful) {
+                            Log.d("Registration", "Verification email sent to $email")
+                            Toast.makeText(this, "Verification email sent. Please verify before logging in.", Toast.LENGTH_LONG).show()
+                        } else {
+                            Log.e("Registration", "Failed to send verification email", verifyTask.exception)
+                            Toast.makeText(this, "Account created, but failed to send verification email.", Toast.LENGTH_SHORT).show()
+                        }
+                        
+                        // Sign out after registration
+                        auth.signOut()
+                        getSharedPreferences("UserPrefs", Context.MODE_PRIVATE).edit().clear().apply()
 
-                    Log.d("Registration", "registerLecturer: Navigating to LecturerActivity")
-                    Toast.makeText(this, "Welcome to SecureAttend!", Toast.LENGTH_SHORT).show()
-                    val intent = Intent(this, LecturerActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        // Redirect to Login
+                        val intent = Intent(this, LecturerLoginActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        }
+                        startActivity(intent)
+                        finish()
                     }
-                    startActivity(intent)
-                    finish()
                 }
                 .addOnFailureListener { e ->
                     Log.e("Registration", "registerLecturer: Firestore Failure", e)

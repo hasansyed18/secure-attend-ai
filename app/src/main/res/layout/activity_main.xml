@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface_background"
+    android:background="@drawable/root_background"
     android:gravity="center"
     android:orientation="vertical"
     android:padding="24dp">
@@ -11,32 +11,35 @@
     <ImageView
         android:layout_width="100dp"
         android:layout_height="100dp"
-        android:src="@drawable/ic_attendit_logo"
-        android:layout_marginBottom="16dp"/>
+        android:src="@drawable/ic_secure_attend_logo"
+        android:layout_marginBottom="24dp"/>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/app_name"
-        android:textColor="@color/brand_primary"
+        android:text="SecureAttend"
+        android:textColor="?attr/colorPrimary"
         android:textSize="32sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:letterSpacing="0.02" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Smart BLE-based attendance system"
-        android:textColor="@color/text_secondary"
-        android:textSize="14sp" />
+        android:text="Next-Gen Educational Framework"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="14sp"
+        android:letterSpacing="0.05" />
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="48dp"
-        app:cardCornerRadius="16dp"
+        android:layout_marginTop="56dp"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="24dp"
         app:cardElevation="2dp"
-        app:strokeColor="@color/border_subtle"
+        app:strokeColor="?attr/colorOutline"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -45,37 +48,37 @@
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="20dp"
+            android:padding="24dp"
             android:background="?attr/selectableItemBackground">
 
             <ImageView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="@drawable/card_bg"
-                android:backgroundTint="#F1F5F9"
-                android:padding="8dp"
+                android:backgroundTint="?attr/colorPrimaryContainer"
+                android:padding="10dp"
                 android:src="@android:drawable/ic_menu_edit"
-                app:tint="@color/brand_primary" />
+                app:tint="?attr/colorPrimary" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
+                android:layout_marginStart="20dp"
                 android:orientation="vertical">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Lecturer Mode"
-                    android:textColor="@color/text_primary"
+                    android:text="Lecturer Terminal"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Manage classes and sessions"
-                    android:textColor="@color/text_secondary"
+                    android:text="Deploy and oversee sessions"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
@@ -85,9 +88,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        app:cardCornerRadius="16dp"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="24dp"
         app:cardElevation="2dp"
-        app:strokeColor="@color/border_subtle"
+        app:strokeColor="?attr/colorOutline"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -96,37 +100,37 @@
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="20dp"
+            android:padding="24dp"
             android:background="?attr/selectableItemBackground">
 
             <ImageView
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="@drawable/card_bg"
-                android:backgroundTint="#F1F5F9"
-                android:padding="8dp"
+                android:backgroundTint="?attr/colorSecondaryContainer"
+                android:padding="10dp"
                 android:src="@android:drawable/ic_menu_view"
-                app:tint="@color/brand_accent" />
+                app:tint="?attr/colorSecondary" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="16dp"
+                android:layout_marginStart="20dp"
                 android:orientation="vertical">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Student Mode"
-                    android:textColor="@color/text_primary"
+                    android:text="Student Portal"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Mark your attendance"
-                    android:textColor="@color/text_secondary"
+                    android:text="Verify presence in classroom"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>

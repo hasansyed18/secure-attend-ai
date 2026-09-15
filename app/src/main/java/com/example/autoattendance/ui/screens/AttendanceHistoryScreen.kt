@@ -6,10 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.autoattendance.ui.components.AetherCircularProgress
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
@@ -65,7 +66,6 @@ fun AttendanceHistoryScreen() {
         Log.d("AttendanceHistory", "Fetching history for student: $uid ($dept $sem $sec)")
         val db = FirebaseFirestore.getInstance()
         
-        // 1. Fetch ALL sessions for this student's specific class (matches enrollment)
         db.collection("attendance_sessions")
             .whereEqualTo("institutionId", instId)
             .whereEqualTo("department", dept)
@@ -73,57 +73,44 @@ fun AttendanceHistoryScreen() {
             .whereEqualTo("section", sec)
             .get().addOnSuccessListener { sessionSnap ->
                 val allSessions = sessionSnap.documents
-                Log.d("AttendanceHistory", "Found ${allSessions.size} total sessions for this student's group")
-
-                // 2. Fetch all subjects for the institution to resolve session subject IDs to names
-                db.collection("subjects")
-                    .whereEqualTo("institutionId", instId)
-                    .get().addOnSuccessListener { subSnap ->
-                        val subjectsMap = subSnap.documents.associate { it.id to (it.getString("subjectName") ?: "Unknown Subject") }
-
-                        // 3. Fetch attendance records for this student
-                        db.collection("attendance_records")
-                            .whereEqualTo("studentId", uid)
-                            .get().addOnSuccessListener { recordSnap ->
-                                val attendedSessionIds = recordSnap.documents.mapNotNull { it.getString("sessionId") }.toSet()
-                                Log.d("AttendanceHistory", "Student attended ${attendedSessionIds.size} sessions total")
-
-                                val historyMap = mutableMapOf<String, MutableList<AttendanceTimelineRecord>>()
-                                
-                                allSessions.forEach { sDoc ->
-                                    val subId = sDoc.getString("subjectId") ?: ""
-                                    if (subId.isNotEmpty()) {
-                                        val sTime = sDoc.getTimestamp("startTime")?.toDate()?.time ?: 0L
-                                        val isPresent = attendedSessionIds.contains(sDoc.id)
-                                        
-                                        if (!historyMap.containsKey(subId)) historyMap[subId] = mutableListOf()
-                                        historyMap[subId]?.add(AttendanceTimelineRecord(sDoc.id, sTime, isPresent))
-                                    }
-                                }
-                                
-                                subjectsHistory = historyMap.map { (id, records) ->
-                                    SubjectHistory(
-                                        id = id,
-                                        name = subjectsMap[id] ?: "Unknown",
-                                        totalClasses = records.size,
-                                        presentCount = records.count { it.isPresent },
-                                        records = records.sortedByDescending { it.timestamp }
-                                    )
-                                }.sortedBy { it.name }
-                                
-                                Log.d("AttendanceHistory", "History processing complete: ${subjectsHistory.size} subjects")
-                                isLoading = false
+                
+                db.collection("subjects").whereEqualTo("institutionId", instId).get().addOnSuccessListener { subSnap ->
+                    val subjectsMap = subSnap.documents.associate { it.id to (it.getString("subjectName") ?: "Unknown Subject") }
+                    
+                    db.collection("attendance_records").whereEqualTo("studentId", uid).get().addOnSuccessListener { recordSnap ->
+                        val attendedSessionIds = recordSnap.documents.mapNotNull { it.getString("sessionId") }.toSet()
+                        val historyMap = mutableMapOf<String, MutableList<AttendanceTimelineRecord>>()
+                        
+                        allSessions.forEach { sDoc ->
+                            val subId = sDoc.getString("subjectId") ?: ""
+                            if (subId.isNotEmpty()) {
+                                val sTime = sDoc.getTimestamp("startTime")?.toDate()?.time ?: 0L
+                                val isPresent = attendedSessionIds.contains(sDoc.id)
+                                if (!historyMap.containsKey(subId)) historyMap[subId] = mutableListOf()
+                                historyMap[subId]?.add(AttendanceTimelineRecord(sDoc.id, sTime, isPresent))
                             }
+                        }
+                        
+                        subjectsHistory = historyMap.map { (id, records) ->
+                            SubjectHistory(
+                                id = id,
+                                name = subjectsMap[id] ?: "Unknown",
+                                totalClasses = records.size,
+                                presentCount = records.count { it.isPresent },
+                                records = records.sortedByDescending { it.timestamp }
+                            )
+                        }.sortedBy { it.name }
+                        isLoading = false
                     }
-            }.addOnFailureListener { e ->
-                Log.e("AttendanceHistory", "Fetch failed", e)
+                }
+            }.addOnFailureListener {
                 isLoading = false
             }
     }
 
     if (isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         }
     } else if (selectedSubject == null) {
         SubjectList(subjectsHistory, onSubjectSelect = { selectedSubject = it })
@@ -138,58 +125,55 @@ fun SubjectList(subjects: List<SubjectHistory>, onSubjectSelect: (SubjectHistory
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
+            .padding(20.dp)
     ) {
         Text(
-            text = "Subject-wise History",
+            text = "Academic History",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
+            fontWeight = FontWeight.Bold
         )
+        Text(
+            text = "Track your attendance progress per subject",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (subjects.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "No attendance history available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text = "No records found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             items(subjects) { history ->
-                SubjectCard(history, onClick = { onSubjectSelect(history) })
+                Card(
+                    onClick = { onSubjectSelect(history) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                ) {
+                    Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        AetherCircularProgress(
+                            progress = (history.percentage / 100f),
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = history.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "${String.format(Locale.getDefault(), "%.1f", history.percentage)}% • ${history.presentCount}/${history.totalClasses} classes",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (history.percentage < 75) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    }
+                }
             }
-        }
-    }
-}
-
-@Composable
-fun SubjectCard(history: SubjectHistory, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Book,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = history.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text(
-                    text = "${String.format(Locale.getDefault(), "%.1f", history.percentage)}% Attendance • ${history.presentCount}/${history.totalClasses} Classes",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (history.percentage < 75) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
         }
     }
 }
@@ -197,39 +181,56 @@ fun SubjectCard(history: SubjectHistory, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubjectDetail(subjectHistory: SubjectHistory, onBack: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
-            title = { Text(subjectHistory.name, style = MaterialTheme.typography.titleMedium) },
+            title = { Text(subjectHistory.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            }
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
         )
 
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard(label = "Present", value = subjectHistory.presentCount.toString(), modifier = Modifier.weight(1f))
-                StatCard(label = "Total", value = subjectHistory.totalClasses.toString(), modifier = Modifier.weight(1f))
-                StatCard(
-                    label = "Percent", 
+                HistoryStatCard(label = "Present", value = subjectHistory.presentCount.toString(), modifier = Modifier.weight(1f))
+                HistoryStatCard(label = "Total", value = subjectHistory.totalClasses.toString(), modifier = Modifier.weight(1f))
+                HistoryStatCard(
+                    label = "Score", 
                     value = "${String.format(Locale.getDefault(), "%.1f", subjectHistory.percentage)}%", 
                     modifier = Modifier.weight(1f), 
-                    color = if (subjectHistory.percentage < 75) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    color = if (subjectHistory.percentage < 75) MaterialTheme.colorScheme.error else Color(0xFF10B981)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(text = "Attendance Timeline", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(32.dp))
+            Text(text = "Attendance Timeline", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(subjectHistory.records) { record ->
-                    TimelineItem(record)
+                    val date = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(record.timestamp))
+                    val time = SimpleDateFormat("hh:mm aa", Locale.getDefault()).format(Date(record.timestamp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    ) {
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(10.dp).background(if (record.isPresent) Color(0xFF10B981) else MaterialTheme.colorScheme.error, CircleShape))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = date, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Text(text = time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(
+                                text = if (record.isPresent) "PRESENT" else "ABSENT", 
+                                color = if (record.isPresent) Color(0xFF10B981) else MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.ExtraBold,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -237,36 +238,15 @@ fun SubjectDetail(subjectHistory: SubjectHistory, onBack: () -> Unit) {
 }
 
 @Composable
-fun StatCard(label: String, value: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun HistoryStatCard(label: String, value: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = value, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = color)
-            Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun TimelineItem(record: AttendanceTimelineRecord) {
-    val date = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(record.timestamp))
-    val time = SimpleDateFormat("hh:mm aa", Locale.getDefault()).format(Date(record.timestamp))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(10.dp).background(if (record.isPresent) Color(0xFF10B981) else Color(0xFFEF4444), RoundedCornerShape(5.dp)))
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = date, fontWeight = FontWeight.Medium)
-                Text(text = time, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(text = if (record.isPresent) "Present" else "Absent", color = if (record.isPresent) Color(0xFF10B981) else Color(0xFFEF4444), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = color)
+            Text(text = label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
         }
     }
 }

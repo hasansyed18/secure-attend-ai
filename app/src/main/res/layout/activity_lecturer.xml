@@ -10,12 +10,12 @@
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/surface_background">
+        android:background="@drawable/root_background">
 
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/white"
+            android:background="?attr/colorSurface"
             app:elevation="0dp">
 
             <androidx.appcompat.widget.Toolbar
@@ -28,15 +28,21 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:src="@android:drawable/ic_menu_sort_by_size"
-                    app:tint="@color/text_secondary" />
+                    app:tint="?attr/colorOnSurfaceVariant" />
 
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="end"
-                    android:layout_marginEnd="16dp"
+                    android:layout_marginEnd="12dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
+
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/themeToggleCompose"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="16dp" />
 
                     <View
                         android:id="@+id/statusDot"
@@ -72,7 +78,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Dashboard"
-                    android:textColor="@color/text_primary"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="28sp"
                     android:textStyle="bold" />
 
@@ -82,7 +88,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Welcome back — here's today's overview"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="14sp" />
 
                 <!-- Summary Cards Grid -->
@@ -98,11 +104,10 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
-                        app:cardBackgroundColor="@color/white"
+                        app:cardBackgroundColor="@color/brandPurple"
                         app:cardCornerRadius="16dp"
                         app:cardElevation="2dp"
-                        app:strokeColor="@color/border_subtle"
-                        app:strokeWidth="1dp">
+                        app:strokeWidth="0dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -120,7 +125,8 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="STUDENTS PRESENT"
-                                    android:textColor="@color/text_secondary"
+                                    android:textColor="@color/white"
+                                    android:alpha="0.8"
                                     android:textSize="12sp"
                                     android:textStyle="bold" />
 
@@ -130,7 +136,7 @@
                                     android:layout_height="wrap_content"
                                     android:layout_marginTop="4dp"
                                     android:text="0/0"
-                                    android:textColor="@color/text_primary"
+                                    android:textColor="@color/white"
                                     android:textSize="24sp"
                                     android:textStyle="bold" />
 
@@ -140,7 +146,8 @@
                                     android:layout_height="wrap_content"
                                     android:layout_marginTop="4dp"
                                     android:text="0% attendance"
-                                    android:textColor="@color/text_secondary"
+                                    android:textColor="@color/white"
+                                    android:alpha="0.7"
                                     android:textSize="12sp" />
                             </LinearLayout>
 
@@ -148,9 +155,10 @@
                                 android:layout_width="40dp"
                                 android:layout_height="40dp"
                                 android:background="@drawable/card_bg"
+                                android:backgroundTint="#33FFFFFF"
                                 android:padding="8dp"
                                 android:src="@android:drawable/ic_menu_myplaces"
-                                app:tint="@color/status_success" />
+                                app:tint="@color/white" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -159,11 +167,10 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
-                        app:cardBackgroundColor="@color/white"
+                        app:cardBackgroundColor="@color/status_warning"
                         app:cardCornerRadius="16dp"
                         app:cardElevation="2dp"
-                        app:strokeColor="@color/border_subtle"
-                        app:strokeWidth="1dp">
+                        app:strokeWidth="0dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -181,7 +188,8 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="SUSPICIOUS ENTRIES"
-                                    android:textColor="@color/text_secondary"
+                                    android:textColor="@color/white"
+                                    android:alpha="0.8"
                                     android:textSize="12sp"
                                     android:textStyle="bold" />
 
@@ -191,7 +199,7 @@
                                     android:layout_height="wrap_content"
                                     android:layout_marginTop="4dp"
                                     android:text="0"
-                                    android:textColor="@color/text_primary"
+                                    android:textColor="@color/white"
                                     android:textSize="24sp"
                                     android:textStyle="bold" />
 
@@ -200,7 +208,8 @@
                                     android:layout_height="wrap_content"
                                     android:layout_marginTop="4dp"
                                     android:text="Weak signal detected"
-                                    android:textColor="@color/text_secondary"
+                                    android:textColor="@color/white"
+                                    android:alpha="0.7"
                                     android:textSize="12sp" />
                             </LinearLayout>
 
@@ -208,9 +217,10 @@
                                 android:layout_width="40dp"
                                 android:layout_height="40dp"
                                 android:background="@drawable/card_bg"
+                                android:backgroundTint="#33FFFFFF"
                                 android:padding="8dp"
                                 android:src="@android:drawable/stat_sys_warning"
-                                app:tint="@color/status_warning" />
+                                app:tint="@color/white" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
                 </GridLayout>
@@ -221,10 +231,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    app:cardBackgroundColor="@color/white"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="4dp"
-                    app:strokeColor="@color/brand_accent"
+                    app:cardBackgroundColor="?attr/colorSurface"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="6dp"
+                    app:strokeColor="?attr/colorPrimary"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -243,9 +253,10 @@
                                 android:layout_width="48dp"
                                 android:layout_height="48dp"
                                 android:background="@drawable/card_bg"
+                                android:backgroundTint="?attr/colorPrimary"
                                 android:padding="12dp"
                                 android:src="@android:drawable/stat_sys_data_bluetooth"
-                                app:tint="@color/status_info" />
+                                app:tint="?attr/colorOnPrimary" />
 
                             <LinearLayout
                                 android:layout_width="0dp"
@@ -259,7 +270,7 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="No Active Session"
-                                    android:textColor="@color/text_primary"
+                                    android:textColor="?attr/colorOnSurface"
                                     android:textSize="18sp"
                                     android:textStyle="bold" />
 
@@ -268,19 +279,37 @@
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:text="Choose a subject to begin"
-                                    android:textColor="@color/text_secondary"
+                                    android:textColor="?attr/colorOnSurfaceVariant"
                                     android:textSize="12sp" />
                             </LinearLayout>
 
-                            <TextView
-                                android:id="@+id/tvLiveIndicator"
+                            <LinearLayout
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="● LIVE"
-                                android:textColor="@color/status_success"
-                                android:textSize="12sp"
-                                android:textStyle="bold"
-                                android:visibility="gone" />
+                                android:orientation="vertical"
+                                android:gravity="end">
+
+                                <TextView
+                                    android:id="@+id/tvLiveIndicator"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="● LIVE"
+                                    android:textColor="@color/status_success"
+                                    android:textSize="12sp"
+                                    android:textStyle="bold"
+                                    android:visibility="gone" />
+
+                                <TextView
+                                    android:id="@+id/tvSessionPin"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:text="PIN: ----"
+                                    android:textColor="?attr/colorPrimary"
+                                    android:textSize="16sp"
+                                    android:textStyle="bold"
+                                    android:visibility="gone" />
+                            </LinearLayout>
                         </LinearLayout>
 
                         <LinearLayout
@@ -291,20 +320,24 @@
 
                             <Button
                                 android:id="@+id/btnStartClass"
+                                style="@style/Widget.MaterialComponents.Button"
                                 android:layout_width="0dp"
                                 android:layout_height="56dp"
                                 android:layout_weight="1"
                                 android:text="Start Session"
+                                android:textStyle="bold"
+                                android:background="@drawable/brand_gradient_button"
+                                app:backgroundTint="@null"
                                 app:cornerRadius="12dp" />
 
                             <Button
                                 android:id="@+id/btnStopClass"
-                                style="@style/Widget.MaterialComponents.Button.TextButton"
+                                style="@style/Widget.Material3.Button.TonalButton"
                                 android:layout_width="0dp"
                                 android:layout_height="56dp"
                                 android:layout_weight="1"
                                 android:text="Stop Session"
-                                android:textColor="@color/status_danger"
+                                android:textColor="?attr/colorError"
                                 android:visibility="gone"
                                 app:cornerRadius="12dp" />
                         </LinearLayout>
@@ -318,25 +351,21 @@
 
                             <Button
                                 android:id="@+id/btnAddSubject"
-                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="+ Add"
+                                android:text="+ Add Course"
                                 android:layout_marginEnd="4dp"
                                 app:cornerRadius="8dp" />
 
-
-
-
-
                             <Button
                                 android:id="@+id/btnExportCsv"
-                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:text="Export"
+                                android:text="Export CSV"
                                 android:layout_marginStart="4dp"
                                 android:visibility="gone"
                                 app:cornerRadius="8dp" />
@@ -350,10 +379,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="24dp"
-                    app:cardBackgroundColor="@color/white"
-                    app:cardCornerRadius="12dp"
+                    app:cardBackgroundColor="?attr/colorSurface"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp"
-                    app:strokeColor="@color/border_subtle"
+                    app:strokeColor="?attr/colorOutline"
                     app:strokeWidth="1dp"
                     android:visibility="gone">
 
@@ -366,8 +395,8 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Manual Attendance"
-                            android:textColor="@color/text_primary"
+                            android:text="Manual Intervention"
+                            android:textColor="?attr/colorOnSurface"
                             android:textSize="14sp"
                             android:textStyle="bold" />
 
@@ -383,8 +412,9 @@
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1"
-                                android:hint="Search Student USN"
-                                app:startIconDrawable="@android:drawable/ic_menu_search">
+                                android:hint="Student USN"
+                                app:startIconDrawable="@android:drawable/ic_menu_search"
+                                app:startIconTint="?attr/colorPrimary">
 
                                 <com.google.android.material.textfield.TextInputEditText
                                     android:id="@+id/etSearchUsn"
@@ -392,6 +422,7 @@
                                     android:layout_height="wrap_content"
                                     android:inputType="textCapCharacters"
                                     android:maxLength="10"
+                                    android:textColor="?attr/colorOnSurface"
                                     android:textSize="14sp" />
                             </com.google.android.material.textfield.TextInputLayout>
 
@@ -400,7 +431,8 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="12dp"
-                                android:text="Mark"
+                                android:text="LOG"
+                                android:textStyle="bold"
                                 app:cornerRadius="8dp" />
                         </LinearLayout>
                     </LinearLayout>
@@ -411,8 +443,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="32dp"
-                    android:text="Recent Detections"
-                    android:textColor="@color/text_primary"
+                    android:text="Live Recognition Feed"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -422,7 +454,7 @@
                     android:layout_height="400dp"
                     android:layout_marginTop="12dp"
                     android:divider="@android:color/transparent"
-                    android:dividerHeight="8dp"
+                    android:dividerHeight="12dp"
                     android:scrollbars="none" />
 
             </LinearLayout>

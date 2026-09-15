@@ -32,6 +32,7 @@ class SplashActivity : AppCompatActivity() {
         tvVersion.startAnimation(fadeIn)
 
         FirestoreSeeder.seedIfNeeded()
+        com.example.autoattendance.ui.theme.ThemeConfig.load(this)
 
         Handler(Looper.getMainLooper()).postDelayed({
             val auth = FirebaseAuth.getInstance()
@@ -66,8 +67,6 @@ class SplashActivity : AppCompatActivity() {
                 }
             } else {
                 Log.d("Routing", "SplashActivity: No user logged in")
-                // IMPORTANT: If not logged in, clear any stale role restored by Android Backup
-                userPrefs.edit().remove("role").apply()
                 proceedToMain()
             }
         }, 2500)

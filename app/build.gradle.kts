@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
-    id("kotlin-kapt")
 }
 android {
     namespace = "com.example.autoattendance"
@@ -56,15 +55,6 @@ dependencies {
     
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
-    // Room Database
-    val room_version = "2.6.1"
-    implementation("androidx.room:room-runtime:$room_version")
-    implementation("androidx.room:room-ktx:$room_version")
-    kapt("androidx.room:room-compiler:$room_version")
-
-    // WorkManager
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-
     // Credential Manager
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
@@ -77,7 +67,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.database)
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.auth.ktx)
 }

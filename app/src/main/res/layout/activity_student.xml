@@ -10,7 +10,7 @@
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/surface_background">
+        android:background="@drawable/root_background">
 
         <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
@@ -29,6 +29,20 @@
                     android:layout_height="24dp"
                     android:src="@android:drawable/ic_menu_sort_by_size"
                     app:tint="@color/text_primary" />
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/gamificationSummaryCompose"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginHorizontal="8dp" />
+
+                <androidx.compose.ui.platform.ComposeView
+                    android:id="@+id/themeToggleCompose"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginEnd="16dp" />
 
             </androidx.appcompat.widget.Toolbar>
         </com.google.android.material.appbar.AppBarLayout>
@@ -153,7 +167,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:text="Make sure Bluetooth and GPS are enabled"
+                            android:text="Make sure Bluetooth is enabled"
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
 
@@ -164,6 +178,9 @@
                             android:layout_height="56dp"
                             android:layout_marginTop="32dp"
                             android:text="Mark Attendance"
+                            android:textStyle="bold"
+                            android:background="@drawable/brand_gradient_button"
+                            app:backgroundTint="@null"
                             app:cornerRadius="12dp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import android.util.Patterns
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.credentials.CreatePasswordRequest
@@ -13,6 +12,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.exceptions.CreateCredentialException
 import androidx.lifecycle.lifecycleScope
 import com.example.autoattendance.models.StudentProfile
+import com.example.autoattendance.ui.theme.AutoAttendanceTheme
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -41,12 +41,14 @@ class StudentProfileActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.autoattendance.ui.theme.ThemeConfig.load(this)
         setContentView(R.layout.activity_student_profile)
 
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
         credentialManager = CredentialManager.create(this)
 
+        setupThemeToggle()
         initViews()
         setupDropdowns()
         fetchStates()
@@ -60,6 +62,15 @@ class StudentProfileActivity : AppCompatActivity() {
         }
 
         findViewById<TextView>(R.id.tvBackToLogin).setOnClickListener { finish() }
+    }
+
+    private fun setupThemeToggle() {
+        val toggleView = findViewById<androidx.compose.ui.platform.ComposeView>(R.id.themeToggleCompose)
+        toggleView.setContent {
+            AutoAttendanceTheme {
+                com.example.autoattendance.ui.components.ThemeToggle()
+            }
+        }
     }
 
     private fun initViews() {
@@ -114,7 +125,7 @@ class StudentProfileActivity : AppCompatActivity() {
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Request New Institution")
             .setView(etInput)
-            .setPositiveButton("Submit") { dialog, which ->
+            .setPositiveButton("Submit") { _, _ ->
                 val name = etInput.text.toString().trim()
                 if (name.isNotEmpty()) {
                     requestInstitution(name)
@@ -245,12 +256,26 @@ class StudentProfileActivity : AppCompatActivity() {
 
                 firestore.collection("users").document(uid).set(profile)
                     .addOnSuccessListener {
-                        progressBar.visibility = android.view.View.GONE
-                        saveLocalPrefs(profile)
-                        saveCredentials(email, password)
-                        Toast.makeText(this, "Welcome to SecureAttend!", Toast.LENGTH_SHORT).show()
-                        startActivity(Intent(this, StudentActivity::class.java))
-                        finish()
+                        // 📂 New: Deterministic ID for Student Directory ({institutionId}_{USN})
+                        val directoryId = "${profile.institutionId}_${profile.usn.uppercase()}"
+                        val directoryEntry = mapOf(
+                            "uid" to uid,
+                            "name" to profile.name,
+                            "usn" to profile.usn.uppercase(),
+                            "institutionId" to profile.institutionId,
+                            "department" to profile.department,
+                            "semester" to profile.semester,
+                            "section" to profile.section,
+                            "batch" to profile.batch.toString()
+                        )
+
+                        firestore.collection("student_directory").document(directoryId).set(directoryEntry)
+                            .addOnSuccessListener { sendVerificationEmailAndExit(email) }
+                            .addOnFailureListener { e ->
+                                Log.e("Registration", "Directory write failed", e)
+                                Toast.makeText(this, "Profile created, but directory sync failed.", Toast.LENGTH_LONG).show()
+                                sendVerificationEmailAndExit(email)
+                            }
                     }
                     .addOnFailureListener { e ->
                         progressBar.visibility = android.view.View.GONE
@@ -264,6 +289,26 @@ class StudentProfileActivity : AppCompatActivity() {
                 Log.e("Registration", "Auth error", task.exception)
                 Toast.makeText(this, "Registration Failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    private fun sendVerificationEmailAndExit(email: String) {
+        auth.currentUser?.sendEmailVerification()?.addOnCompleteListener { verifyTask ->
+            progressBar.visibility = android.view.View.GONE
+            if (verifyTask.isSuccessful) {
+                Log.d("Registration", "Verification email sent to $email")
+                Toast.makeText(this, "Verification email sent. Please verify before logging in.", Toast.LENGTH_LONG).show()
+            } else {
+                Log.e("Registration", "Failed to send verification email", verifyTask.exception)
+                Toast.makeText(this, "Account created, but failed to send verification email.", Toast.LENGTH_SHORT).show()
+            }
+
+            auth.signOut()
+            getSharedPreferences("UserPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+            startActivity(Intent(this, StudentLoginActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
+            finish()
         }
     }
 
@@ -289,7 +334,7 @@ class StudentProfileActivity : AppCompatActivity() {
             .putString("state", p.stateId)
             .putString("city", p.cityId)
             .putString("institutionId", p.institutionId)
-            .putString("institution", p.institutionId) // for UI display
+            .putString("institution", p.institutionId)
             .putString("department", p.department)
             .putString("semester", p.semester)
             .putString("section", p.section)

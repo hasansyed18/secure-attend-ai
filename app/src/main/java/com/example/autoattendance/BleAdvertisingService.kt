@@ -7,20 +7,17 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import java.util.*
 
 class BleAdvertisingService : Service() {
 
     private var bleAdvertiser: BluetoothLeAdvertiser? = null
-    
-    // ⚡ Industry standard 16-bit short UUID for "FEAF"
-    private val SERVICE_UUID = ParcelUuid.fromString("0000FEAF-0000-1000-8000-00805F9B34FB")
+    private val MANUFACTURER_ID = 0x00E0 // 🚀 Use Google's ID for better compatibility
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val sid = intent?.getStringExtra("SESSION_ID") ?: "Unknown"
+        val securityToken = intent?.getStringExtra("SECURITY_TOKEN") ?: ""
         startForeground(1, createNotification(sid))
 
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -32,12 +29,11 @@ class BleAdvertisingService : Service() {
         }
 
         bleAdvertiser = adapter.bluetoothLeAdvertiser
-        val sessionId = intent.getStringExtra("SESSION_ID") ?: run { stopSelf(); return START_NOT_STICKY }
-        val token = intent.getStringExtra("TOKEN") ?: ""
-
-        // New Scalable Protocol: SessionID|Token
-        val packet = "$sessionId|$token"
         
+        // Standard Online format: ON|<sessionId>|<token>
+        val packet = "ON|$sid|$securityToken"
+        
+        Log.d("BLE_ADV", "Starting Advertising Packet: $packet")
         startAdvertising(packet)
         return START_STICKY
     }
@@ -51,20 +47,33 @@ class BleAdvertisingService : Service() {
 
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
-            .addServiceData(SERVICE_UUID, packet.toByteArray())
+            .addManufacturerData(MANUFACTURER_ID, packet.toByteArray())
             .build()
 
         try {
-            bleAdvertiser?.stopAdvertising(advertiseCallback)
-            bleAdvertiser?.startAdvertising(settings, data, advertiseCallback)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_ADVERTISE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                bleAdvertiser?.stopAdvertising(advertiseCallback)
+                bleAdvertiser?.startAdvertising(settings, data, advertiseCallback)
+                Log.d("BLE_ADV", "Broadcasting successfully (${packet.length} bytes)")
+            }
         } catch (e: Exception) {
             Log.e("BLE", "Start advertising error: ${e.message}")
         }
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
-        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { Log.d("BLE", "Broadcasting successfully") }
-        override fun onStartFailure(errorCode: Int) { Log.e("BLE", "Failed: $errorCode") }
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { Log.d("BLE_ADV", "Broadcasting successfully") }
+        override fun onStartFailure(errorCode: Int) { 
+            val msg = when (errorCode) {
+                ADVERTISE_FAILED_DATA_TOO_LARGE -> "DATA_TOO_LARGE"
+                ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "TOO_MANY_ADVERTISERS"
+                ADVERTISE_FAILED_ALREADY_STARTED -> "ALREADY_STARTED"
+                ADVERTISE_FAILED_INTERNAL_ERROR -> "INTERNAL_ERROR"
+                ADVERTISE_FAILED_FEATURE_UNSUPPORTED -> "FEATURE_UNSUPPORTED"
+                else -> "UNKNOWN_ERROR ($errorCode)"
+            }
+            Log.e("BLE_ADV", "Broadcast Failed: $msg") 
+        }
     }
 
     private fun createNotification(sid: String): Notification {
@@ -84,7 +93,11 @@ class BleAdvertisingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        try { bleAdvertiser?.stopAdvertising(advertiseCallback) } catch (_: Exception) {}
+        try { 
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.BLUETOOTH_ADVERTISE) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                bleAdvertiser?.stopAdvertising(advertiseCallback) 
+            }
+        } catch (_: Exception) {}
         super.onDestroy()
     }
 }

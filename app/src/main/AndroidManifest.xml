@@ -88,10 +88,7 @@
             android:exported="false"
             android:label="Attendance History" />
 
-        <activity
-            android:name=".LecturerAnalyticsActivity"
-            android:exported="false"
-            android:label="Class Analytics" />
+
 
 
 

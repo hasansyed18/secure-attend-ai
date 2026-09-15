@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.AutoAttendance" parent="Theme.Material3.Dark.NoActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/brand_light</item>
-        <item name="colorOnPrimary">@color/brand_primary</item>
-        <item name="colorPrimaryContainer">@color/brand_primary</item>
-        <item name="colorOnPrimaryContainer">@color/brand_light</item>
+    <!-- Base application theme - Dark Mode -->
+    <style name="Theme.AutoAttendance" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">@color/surface_background</item>
+        <item name="colorPrimaryContainer">@color/surface_card</item>
+        <item name="colorOnPrimaryContainer">@color/brand_primary</item>
 
-        <!-- Secondary brand color. -->
         <item name="colorSecondary">@color/brand_accent</item>
-        <item name="colorOnSecondary">@color/brand_primary</item>
+        <item name="colorOnSecondary">@color/white</item>
 
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor">@color/surface_background_dark</item>
+        <item name="android:statusBarColor">@color/surface_background</item>
         <item name="android:windowLightStatusBar">false</item>
 
-        <!-- Background colors -->
-        <item name="android:windowBackground">@color/surface_background_dark</item>
-        <item name="colorSurface">@color/surface_card_dark</item>
+        <item name="android:windowBackground">@color/surface_background</item>
+        <item name="colorSurface">@color/surface_card</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorOutline">@color/border_subtle</item>
+        <item name="colorError">@color/status_danger</item>
     </style>
 </resources>

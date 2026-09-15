@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v4.0 DARK MODE (Institutional Indigo-Purple) -->
+    <color name="canvasDark">#100C1D</color>
+    <color name="surfaceDark">#1C1830</color>
+    <color name="borderDark">#322C4A</color>
+    <color name="brandPurpleDark">#A78BFA</color>
+    <color name="brandGreenDark">#34D399</color>
+    <color name="textPrimaryDark">#F1F5F9</color>
+    <color name="textSecondaryDark">#B4C0CE</color>
+
+    <!-- UI Attributes Mapping -->
+    <color name="surface_background">@color/canvasDark</color>
+    <color name="surface_card">@color/surfaceDark</color>
+    <color name="text_primary">@color/textPrimaryDark</color>
+    <color name="text_secondary">@color/textSecondaryDark</color>
+    <color name="border_subtle">@color/borderDark</color>
+
+    <color name="brand_primary">@color/brandPurpleDark</color>
+    <color name="brand_accent">@color/brandGreenDark</color>
+
+    <!-- Semantic (Adjusted for Dark) -->
+    <color name="status_success">#34D399</color>
+    <color name="status_warning">#FBBF24</color>
+    <color name="status_danger">#F87171</color>
+    <color name="white">#1C1830</color> <!-- Inverse surface -->
+    <color name="black">#F1F5F9</color>
+    <color name="success_green">#34D399</color>
+</resources>

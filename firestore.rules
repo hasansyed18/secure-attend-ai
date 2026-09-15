@@ -1,0 +1,168 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================
+    // HELPER FUNCTIONS
+    // =========================
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getRole() {
+      return getUserData().role;
+    }
+
+    function getInstitutionId() {
+      return getUserData().institutionId;
+    }
+
+    // =========================
+    // PUBLIC LOOKUP COLLECTIONS
+    // =========================
+
+    match /states/{stateId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /cities/{cityId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /institutions/{institutionId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // =========================
+    // USERS
+    // =========================
+
+    match /users/{userId} {
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth() && request.auth.uid == userId;
+      allow update: if isAuth()
+                    && request.auth.uid == userId
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                        .hasAny(['role', 'institutionId', 'email']);
+      allow delete: if false;
+    }
+
+    // =========================
+    // STUDENT DIRECTORY
+    // =========================
+
+    match /student_directory/{directoryId} {
+      allow read: if isAuth() && (
+        resource.data.uid == request.auth.uid ||
+        (getRole() == 'lecturer' && resource.data.institutionId == getInstitutionId())
+      );
+      allow create: if isAuth()
+                    && request.auth.uid == request.resource.data.uid
+                    && directoryId == request.resource.data.institutionId + '_' + request.resource.data.usn;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // =========================
+    // INSTITUTION REQUESTS
+    // =========================
+
+    match /institution_requests/{requestId} {
+      allow create: if isAuth();
+      allow read: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // =========================
+    // SUBJECTS
+    // =========================
+
+    match /subjects/{subjectId} {
+      allow read: if isAuth() && resource.data.institutionId == getInstitutionId();
+      allow create: if isAuth()
+                    && getRole() == "lecturer"
+                    && request.resource.data.institutionId == getInstitutionId();
+      allow update: if isAuth()
+                    && getRole() == "lecturer"
+                    && resource.data.institutionId == getInstitutionId()
+                    && resource.data.lecturerId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // =========================
+    // ATTENDANCE SESSIONS
+    // =========================
+
+    match /attendance_sessions/{sessionId} {
+      allow read: if isAuth() && resource.data.institutionId == getInstitutionId();
+      allow create: if isAuth()
+                    && getRole() == "lecturer"
+                    && request.resource.data.institutionId == getInstitutionId();
+      allow update: if isAuth()
+                    && getRole() == "lecturer"
+                    && resource.data.institutionId == getInstitutionId()
+                    && resource.data.lecturerId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // =========================
+    // ATTENDANCE RECORDS
+    // =========================
+
+    match /attendance_records/{recordId} {
+      allow read: if isAuth() && (
+        (getRole() == "student" && resource.data.studentId == request.auth.uid) ||
+        (getRole() == "lecturer" && resource.data.institutionId == getInstitutionId())
+      );
+      allow create: if isAuth() && (
+        (getRole() == "student" && request.resource.data.studentId == request.auth.uid) ||
+        (getRole() == "lecturer" && request.resource.data.institutionId == getInstitutionId())
+      );
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // =========================
+    // VALIDATION LOGS
+    // =========================
+
+    match /validation_logs/{logId} {
+      allow create: if isAuth();
+      allow read: if isAuth() && getRole() == "lecturer";
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // =========================
+    // AUDIT LOGS
+    // =========================
+
+    match /audit_logs/{logId} {
+      allow create: if isAuth();
+      allow read: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // =========================
+    // GAMIFICATION
+    // =========================
+
+    match /gamification/{userId} {
+      allow read: if isAuth() && request.auth.uid == userId;
+      allow create: if isAuth() && request.auth.uid == userId;
+      allow update: if isAuth() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+  }
+}

@@ -76,6 +76,11 @@ object FirestoreSeeder {
             db.collection("institutions").document(inst["institutionId"] as String).set(inst)
         }
         
+        // 🚀 Ensure Subjects and attendance_records collections exist by checking them
+        db.collection("subjects").limit(1).get()
+        db.collection("attendance_records").limit(1).get()
+        db.collection("attendance_sessions").limit(1).get()
+        
         Log.d("FirestoreSeeder", "Seeding completed successfully.")
     }
 }

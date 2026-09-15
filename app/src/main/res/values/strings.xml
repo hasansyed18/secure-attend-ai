@@ -14,5 +14,5 @@
     <string name="lecturer_not_found">Class not found.</string>
     <string name="failed_to_mark">Marking failed</string>
     <string name="database_error">Database error: %1$s</string>
-    <string name="saved_offline">Syncing...</string>
+
 </resources>

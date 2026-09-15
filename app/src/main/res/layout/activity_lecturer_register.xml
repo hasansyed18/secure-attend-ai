@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface_background">
+    android:background="@drawable/root_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -12,40 +12,50 @@
         android:orientation="vertical"
         android:padding="24dp">
 
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/themeToggleCompose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Lecturer Registration"
-            android:textSize="24sp"
+            android:text="Lecturer Enrollment"
+            android:textSize="28sp"
             android:textStyle="bold"
-            android:textColor="@color/brand_primary"
+            android:textColor="?attr/colorOnSurface"
             android:layout_marginBottom="24dp"/>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="16dp"
+            app:cardBackgroundColor="?attr/colorSurface"
+            app:cardCornerRadius="24dp"
             app:cardElevation="2dp"
-            app:strokeColor="@color/border_subtle"
+            app:strokeColor="?attr/colorOutline"
             app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:padding="28dp">
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="Full Name"
-                    android:layout_marginBottom="12dp">
+                    android:layout_marginBottom="12dp"
+                    app:startIconDrawable="@android:drawable/ic_menu_edit"
+                    app:startIconTint="?attr/colorPrimary">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etName"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textPersonName"/>
+                        android:inputType="textPersonName"
+                        android:textColor="?attr/colorOnSurface"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -53,35 +63,45 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="Email Address"
-                    android:layout_marginBottom="12dp">
+                    android:layout_marginBottom="12dp"
+                    app:startIconDrawable="@android:drawable/ic_dialog_email"
+                    app:startIconTint="?attr/colorPrimary">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etEmail"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textEmailAddress"/>
+                        android:inputType="textEmailAddress"
+                        android:textColor="?attr/colorOnSurface"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Password"
+                    android:hint="Security Password"
                     app:passwordToggleEnabled="true"
-                    android:layout_marginBottom="16dp">
+                    android:layout_marginBottom="16dp"
+                    app:startIconDrawable="@android:drawable/ic_lock_idle_lock"
+                    app:startIconTint="?attr/colorPrimary"
+                    app:passwordToggleTint="?attr/colorOnSurfaceVariant">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etPassword"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textPassword"/>
+                        android:inputType="textPassword"
+                        android:textColor="?attr/colorOnSurface"/>
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Institution Details"
-                    android:textColor="@color/brand_primary"
+                    android:text="Institutional Assignment"
+                    android:textColor="?attr/colorPrimary"
                     android:textStyle="bold"
-                    android:layout_marginBottom="12dp"/>
+                    android:textSize="12sp"
+                    android:letterSpacing="0.1"
+                    android:layout_marginBottom="16dp"
+                    android:layout_marginTop="8dp"/>
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
@@ -93,7 +113,8 @@
                         android:id="@+id/autoCompleteState"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="none" />
+                        android:inputType="none"
+                        android:textColor="?attr/colorOnSurface" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -106,7 +127,8 @@
                         android:id="@+id/autoCompleteCity"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="none" />
+                        android:inputType="none"
+                        android:textColor="?attr/colorOnSurface" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -119,26 +141,28 @@
                         android:id="@+id/autoCompleteInstitution"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="none" />
+                        android:inputType="none"
+                        android:textColor="?attr/colorOnSurface" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <TextView
                     android:id="@+id/tvRequestInstitution"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Institution not found? Request one"
-                    android:textColor="@color/brand_primary"
-                    android:textSize="12sp"
-                    android:layout_marginBottom="16dp"
+                    android:text="Institution missing? Request manually"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="11sp"
+                    android:layout_marginBottom="24dp"
                     android:padding="4dp"/>
 
                 <Button
                     android:id="@+id/btnRegister"
+                    style="@style/Widget.Material3.Button"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
-                    android:text="Register"
-                    app:cornerRadius="12dp"
-                    android:layout_marginTop="16dp"/>
+                    android:text="Create Account"
+                    android:textStyle="bold"
+                    app:cornerRadius="12dp" />
 
                 <ProgressBar
                     android:id="@+id/progressBar"

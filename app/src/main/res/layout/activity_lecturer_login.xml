@@ -3,23 +3,28 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface_background"
+    android:background="?attr/android:windowBackground"
     android:gravity="center"
     android:orientation="vertical"
     android:padding="24dp">
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/themeToggleCompose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end" />
 
     <ImageView
         android:layout_width="64dp"
         android:layout_height="64dp"
         android:layout_marginBottom="24dp"
-        android:src="@android:drawable/ic_menu_edit"
-        app:tint="@color/brand_primary" />
+        android:src="@drawable/ic_secure_attend_logo" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Lecturer Login"
-        android:textColor="@color/text_primary"
+        android:text="Lecturer Console"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold" />
 
@@ -27,37 +32,40 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="Manage your virtual classroom"
-        android:textColor="@color/text_secondary"
+        android:text="Manage institutional attendance records"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="14sp" />
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
-        app:cardCornerRadius="16dp"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="24dp"
         app:cardElevation="2dp"
-        app:strokeColor="@color/border_subtle"
+        app:strokeColor="?attr/colorOutline"
         app:strokeWidth="1dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:padding="28dp">
 
             <com.google.android.material.textfield.TextInputLayout
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Email Address"
-                app:startIconDrawable="@android:drawable/ic_dialog_email">
+                android:hint="Institution Email"
+                app:startIconDrawable="@android:drawable/ic_dialog_email"
+                app:startIconTint="?attr/colorPrimary">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etEmail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textEmailAddress" />
+                    android:inputType="textEmailAddress"
+                    android:textColor="?attr/colorOnSurface" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -65,15 +73,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:hint="Password"
+                android:hint="Access Password"
                 app:passwordToggleEnabled="true"
-                app:startIconDrawable="@android:drawable/ic_lock_idle_lock">
+                app:startIconDrawable="@android:drawable/ic_lock_idle_lock"
+                app:startIconTint="?attr/colorPrimary"
+                app:passwordToggleTint="?attr/colorOnSurfaceVariant">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etPassword"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textPassword" />
+                    android:inputType="textPassword"
+                    android:textColor="?attr/colorOnSurface" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <Button
@@ -83,7 +94,31 @@
                 android:layout_height="56dp"
                 android:layout_marginTop="32dp"
                 android:text="Login"
+                android:textStyle="bold"
                 app:cornerRadius="12dp" />
+
+            <TextView
+                android:id="@+id/tvForgotPassword"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:padding="8dp"
+                android:text="Forgot Password?"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvResendVerification"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:text="Resend Verification Code?"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="11sp" />
 
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -92,10 +127,20 @@
         android:id="@+id/tvRegister"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:padding="12dp"
-        android:text="Don't have an account? Register"
-        android:textColor="@color/brand_primary"
+        android:layout_marginTop="16dp"
+        android:padding="8dp"
+        android:text="Join as certified lecturer"
+        android:textColor="?attr/colorPrimary"
         android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvChangeRole"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:padding="12dp"
+        android:text="Return to Role Selection"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="12sp" />
 
 </LinearLayout>

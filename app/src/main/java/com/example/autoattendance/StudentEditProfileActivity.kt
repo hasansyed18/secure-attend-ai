@@ -5,20 +5,25 @@ import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.textfield.TextInputEditText
-import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class StudentEditProfileActivity : AppCompatActivity() {
 
-    private lateinit var database: FirebaseDatabase
+    private lateinit var firestore: FirebaseFirestore
+    private lateinit var auth: FirebaseAuth
     private var currentUsn: String = ""
+    private var instId: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_student_edit_profile)
 
-        database = FirebaseDatabase.getInstance()
+        firestore = FirebaseFirestore.getInstance()
+        auth = FirebaseAuth.getInstance()
         val prefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
         currentUsn = prefs.getString("usn", "") ?: ""
+        instId = prefs.getString("institutionId", "") ?: ""
 
         val tvFixedInfo = findViewById<TextView>(R.id.tvFixedInfo)
         val etName = findViewById<TextInputEditText>(R.id.etEditName)
@@ -39,9 +44,7 @@ class StudentEditProfileActivity : AppCompatActivity() {
         val sem = prefs.getString("semester", "1")
         val sec = prefs.getString("section", "")
         val inst = prefs.getString("institution", "")
-        val batch = prefs.getString("batchYear", "")
-        val state = prefs.getString("state", "")
-        val city = prefs.getString("city", "")
+        val batch = prefs.getInt("batch", 0).toString()
 
         etName.setText(name)
         etSection.setText(sec)
@@ -53,7 +56,6 @@ class StudentEditProfileActivity : AppCompatActivity() {
             USN: $currentUsn
             Batch Year: $batch
             Institution: $inst
-            Location: $city, $state
         """.trimIndent()
 
         btnUpdate.setOnClickListener {
@@ -67,35 +69,47 @@ class StudentEditProfileActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            updateProfileInFirebase(updatedName, updatedDept, updatedSem, updatedSec)
+            updateProfileInFirestore(updatedName, updatedDept, updatedSem, updatedSec)
         }
     }
 
-    private fun updateProfileInFirebase(name: String, dept: String, sem: String, sec: String) {
+    private fun updateProfileInFirestore(name: String, dept: String, sem: String, sec: String) {
+        val uid = auth.currentUser?.uid ?: return
+        
         val updates = mapOf(
-            "fullName" to name,
+            "name" to name,
             "department" to dept,
             "semester" to sem,
             "section" to sec
         )
 
-        // Update under students/{usn} for attendance compatibility
-        database.reference.child("students").child(currentUsn).updateChildren(updates)
-            .addOnSuccessListener {
-                // Update local storage
-                val prefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putString("name", name)
-                    .putString("department", dept)
-                    .putString("semester", sem)
-                    .putString("section", sec)
-                    .apply()
+        val batch = firestore.batch()
+        
+        // 1. Update primary profile
+        val userRef = firestore.collection("users").document(uid)
+        batch.update(userRef, updates)
 
-                Toast.makeText(this, "Profile Updated!", Toast.LENGTH_SHORT).show()
-                finish()
-            }
-            .addOnFailureListener {
-                Toast.makeText(this, "Update Failed: ${it.message}", Toast.LENGTH_SHORT).show()
-            }
+        // 2. Update Student Directory entry (if USN and InstId are available)
+        if (currentUsn.isNotEmpty() && instId.isNotEmpty()) {
+            val directoryId = "${instId}_${currentUsn.uppercase()}"
+            val directoryRef = firestore.collection("student_directory").document(directoryId)
+            batch.update(directoryRef, updates)
+        }
+
+        batch.commit().addOnSuccessListener {
+            // Update local storage
+            val prefs = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("name", name)
+                .putString("department", dept)
+                .putString("semester", sem)
+                .putString("section", sec)
+                .apply()
+
+            Toast.makeText(this, "Profile Updated!", Toast.LENGTH_SHORT).show()
+            finish()
+        }.addOnFailureListener {
+            Toast.makeText(this, "Update Failed: ${it.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 }

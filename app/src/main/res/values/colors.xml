@@ -1,42 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand Colors -->
-    <color name="brand_primary">#50207A</color>
-    <color name="brand_light">#D6B9FC</color>
-    <color name="brand_accent">#838CE5</color>
-    
-    <!-- Semantic Colors -->
+    <!-- v4.0 BRAND CORE (Purple + Green) -->
+    <color name="brandPurple">#8B5CF6</color>
+    <color name="brandGreen">#10B981</color>
+
+    <!-- v4.0 LIGHT MODE -->
+    <color name="canvasLight">#F8F9FE</color>
+    <color name="cardBgLight">#FFFFFF</color>
+    <color name="brandPurpleTint">#EDE9FE</color>
+    <color name="brandGreenTint">#D1FAE5</color>
+    <color name="brandPurpleBadgeText">#5B21B6</color>
+    <color name="brandGreenBadgeText">#065F46</color>
+    <color name="textPrimaryLight">#1E293B</color>
+    <color name="textSecondaryLight">#475569</color>
+    <color name="borderLight">#E2E8F0</color>
+
+    <!-- UI Attributes Mapping -->
+    <color name="surface_background">@color/canvasLight</color>
+    <color name="surface_card">@color/cardBgLight</color>
+    <color name="text_primary">@color/textPrimaryLight</color>
+    <color name="text_secondary">@color/textSecondaryLight</color>
+    <color name="border_subtle">@color/borderLight</color>
+
+    <color name="brand_primary">@color/brandPurple</color>
+    <color name="brand_accent">@color/brandGreen</color>
+
+    <!-- v4.0 DARK MODE MIRROR -->
+    <color name="canvasDark">#100C1D</color>
+    <color name="surfaceDark">#1C1830</color>
+    <color name="borderDark">#322C4A</color>
+    <color name="brandPurpleDark">#A78BFA</color>
+    <color name="brandGreenDark">#34D399</color>
+    <color name="textPrimaryDark">#F1F5F9</color>
+    <color name="textSecondaryDark">#B4C0CE</color>
+
+    <!-- Semantic -->
     <color name="status_success">#10B981</color>
-    <color name="success_green">#10B981</color> <!-- Added back for compatibility -->
     <color name="status_warning">#F59E0B</color>
     <color name="status_danger">#EF4444</color>
-    <color name="status_info">#3B82F6</color>
-
-    <!-- Light Mode Neutrals -->
-    <color name="surface_background">#F8F9FE</color>
-    <color name="surface_card">#FFFFFF</color>
-    <color name="text_primary">#1E293B</color>
-    <color name="text_secondary">#64748B</color>
-    <color name="border_subtle">#E2E8F0</color>
-
-    <!-- Dark Mode Neutrals -->
-    <color name="surface_background_dark">#0F172A</color>
-    <color name="surface_card_dark">#1E293B</color>
-    <color name="text_primary_dark">#F1F5F9</color>
-    <color name="text_secondary_dark">#94A3B8</color>
-    <color name="border_subtle_dark">#334155</color>
-
-    <!-- Signal Badge Colors -->
-    <color name="signal_strong">#10B981</color>
-    <color name="signal_medium">#F59E0B</color>
-    <color name="signal_weak">#EF4444</color>
-    
-    <!-- Legacy Support -->
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+    <color name="success_green">#10B981</color>
 </resources>
